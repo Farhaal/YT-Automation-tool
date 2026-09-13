@@ -44,12 +44,12 @@
           "backup_asset": {
             "$ref": "#/definitions/AssetMetadata"
           },
-          "motion": { "type": "string" },
+          "motion": { "type": "string", "enum": ["none", "kenburns_in", "kenburns_out"] },
           "transition_out": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "type": { "type": "string" },
+              "type": { "type": "string", "enum": ["none", "crossfade"] },
               "duration": { "type": "number", "minimum": 0 }
             }
           }
@@ -73,14 +73,19 @@
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["at", "duration", "type"],
         "additionalProperties": false,
         "properties": {
           "at": { "type": "number", "minimum": 0 },
           "duration": { "type": "number", "minimum": 0 },
-          "type": { "type": "string" },
+          "type": { "type": "string", "enum": ["text", "image", "shape"] },
+          "text": { "type": "string" },
           "path": { "type": "string" },
-          "position": { "type": "string" },
-          "animation": { "type": "string" }
+          "shape": { "type": "string", "enum": ["circle", "rectangle"] },
+          "color": { "type": "string" },
+          "size": { "type": "number", "minimum": 0 },
+          "position": { "type": "string", "enum": ["center", "top", "bottom", "left", "right"] },
+          "animation": { "type": "string", "enum": ["none", "fade", "slide"] }
         }
       }
     },

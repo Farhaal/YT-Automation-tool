@@ -92,3 +92,51 @@ def test_job_orchestration(monkeypatch):
     
     # Verify Audio was synthesized FIRST, then transcribed
     assert called_stages == ["synthesize", "transcribe", "segment", "assemble", "render"]
+
+def test_timeline_immutability(monkeypatch, tmp_path):
+    job_id = "test-job-immutable"
+    from backend.app.services.job_manager import job_manager
+    job_manager.create_job(job_id)
+    
+    import json, copy
+    timeline = {
+        "version": 1,
+        "resolution": {"width": 1080, "height": 1920, "fps": 30},
+        "audio": {"path": "test.wav", "duration": 10},
+        "scenes": [{"id": "s1", "start": 0, "end": 10, "text": "scene", "motion": "none"}],
+        "captions": [{"word": "word", "start": 0, "end": 1}],
+        "popups": []
+    }
+    
+    t_path = tmp_path / "jobs" / job_id / "timeline.json"
+    t_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(t_path, "w", encoding="utf-8") as f_time:
+        json.dump(timeline, f_time)
+        
+    job_manager.update_job(job_id, timeline_path=str(t_path))
+    
+    # Try adding a scene
+    bad_timeline = copy.deepcopy(timeline)
+    bad_timeline["scenes"] = [{"id": "s1", "start": 0, "end": 5, "text": "s1"}, {"id": "s2", "start": 5, "end": 10, "text": "s2"}]
+    res = client.put(f"/jobs/{job_id}/timeline", json=bad_timeline)
+    assert res.status_code == 400
+    assert "Scene count mismatch" in res.json()["detail"]
+    
+    # Try modifying an ID
+    bad_timeline = copy.deepcopy(timeline)
+    bad_timeline["scenes"] = [{"id": "s-hacked", "start": 0, "end": 10, "text": "s1"}]
+    res = client.put(f"/jobs/{job_id}/timeline", json=bad_timeline)
+    assert res.status_code == 400
+    assert "Scene ID mismatch" in res.json()["detail"]
+    
+    # Try modifying timestamps (should be restored)
+    valid_edit = copy.deepcopy(timeline)
+    valid_edit["scenes"][0]["motion"] = "kenburns_in"
+    valid_edit["scenes"][0]["start"] = 999 
+    res = client.put(f"/jobs/{job_id}/timeline", json=valid_edit)
+    assert res.status_code == 200
+    
+    with open(t_path, "r", encoding="utf-8") as f_read:
+        saved = json.load(f_read)
+        assert saved["scenes"][0]["motion"] == "kenburns_in"
+        assert saved["scenes"][0]["start"] == 0 

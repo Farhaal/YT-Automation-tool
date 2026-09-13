@@ -214,28 +214,68 @@ export default function EditorView({ jobId }: { jobId: string }) {
         </div>
         
         {timeline.popups && timeline.popups.length > 0 && (
-          <div className="bg-white p-4 rounded shadow">
+          <div className="bg-white p-4 rounded shadow mt-6">
             <h3 className="font-bold text-lg mb-4 border-b pb-2">Popups / Overlays</h3>
             <div className="space-y-2">
               {timeline.popups.map((p: any, idx: number) => (
-                <div key={idx} className="flex gap-2 text-sm items-center border p-2 rounded">
-                  <span className="font-mono text-gray-500 w-16">{p.at.toFixed(1)}s</span>
+                <div key={idx} className="flex gap-2 text-sm items-center border p-2 rounded flex-wrap">
+                  <span className="font-mono text-gray-500 w-12">{p.at.toFixed(1)}s</span>
                   <select 
                     value={p.type} 
                     onChange={e => { const t = {...timeline}; t.popups[idx].type = e.target.value; setTimeline(t); }}
                     className="border rounded p-1"
                   >
-                    <option value="text">Text Callout</option>
-                    <option value="image">Image Overlay</option>
+                    <option value="text">Text</option>
+                    <option value="image">Image</option>
+                    <option value="shape">Shape</option>
                   </select>
-                  <input 
-                    type="text" 
-                    value={p.path} 
-                    onChange={e => { const t = {...timeline}; t.popups[idx].path = e.target.value; setTimeline(t); }}
-                    className="border rounded px-2 py-1 flex-1"
-                    placeholder="Text or Image Path"
-                  />
-                  <button onClick={() => { const t = {...timeline}; t.popups.splice(idx,1); setTimeline(t); }} className="text-red-500 font-bold px-2">X</button>
+                  
+                  {p.type === 'shape' ? (
+                    <>
+                      <select 
+                        value={p.shape || 'rectangle'} 
+                        onChange={e => { const t = {...timeline}; t.popups[idx].shape = e.target.value; setTimeline(t); }}
+                        className="border rounded p-1"
+                      >
+                        <option value="rectangle">Rectangle</option>
+                        <option value="circle">Circle</option>
+                      </select>
+                      <select 
+                        value={p.color || 'red'} 
+                        onChange={e => { const t = {...timeline}; t.popups[idx].color = e.target.value; setTimeline(t); }}
+                        className="border rounded p-1"
+                      >
+                        <option value="red">Red</option>
+                        <option value="green">Green</option>
+                        <option value="blue">Blue</option>
+                        <option value="black">Black</option>
+                        <option value="white">White</option>
+                      </select>
+                    </>
+                  ) : (
+                    <input 
+                      type="text" 
+                      value={p.type === 'text' ? (p.text || p.path || '') : p.path} 
+                      onChange={e => { 
+                        const t = {...timeline}; 
+                        if (p.type === 'text') { t.popups[idx].text = e.target.value; }
+                        else { t.popups[idx].path = e.target.value; }
+                        setTimeline(t); 
+                      }}
+                      className="border rounded px-2 py-1 flex-1"
+                      placeholder={p.type === 'text' ? "Text Callout" : "data/uploads/image.png"}
+                    />
+                  )}
+                  <select 
+                    value={p.position || 'center'} 
+                    onChange={e => { const t = {...timeline}; t.popups[idx].position = e.target.value; setTimeline(t); }}
+                    className="border rounded p-1"
+                  >
+                    <option value="center">Center</option>
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                  <button onClick={() => { const t = {...timeline}; t.popups.splice(idx,1); setTimeline(t); }} className="text-red-500 font-bold px-2 hover:bg-red-50 rounded">X</button>
                 </div>
               ))}
             </div>

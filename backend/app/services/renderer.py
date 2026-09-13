@@ -60,6 +60,7 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
             
             asset = scene.get("asset")
             clip = None
+            motion = scene.get("motion", "none")
             
             if asset is not None:
                 atype = asset["type"]
@@ -77,7 +78,13 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
                         iclip = ImageClip(apath).with_duration(dur)
                         resources_to_close.append(iclip)
                         scale = max(W / iclip.w, H / iclip.h)
-                        clip = iclip.resized(scale).with_effects([vfx.Resize(lambda t: 1.0 + 0.05 * (t / dur))])
+                        clip = iclip.resized(scale)
+                        
+                    if motion == "kenburns_in":
+                        clip = clip.with_effects([vfx.Resize(lambda t: 1.0 + 0.05 * (t / max(dur, 0.1)))])
+                    elif motion == "kenburns_out":
+                        clip = clip.resized(1.05).with_effects([vfx.Resize(lambda t: 1.0 - 0.0476 * (t / max(dur, 0.1)))])
+                        
                 except Exception as e:
                     logger.warning(f"Failed to load asset {apath} ({type(e).__name__}). Using fallback.")
                     clip = None
@@ -110,15 +117,39 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
 
         for p in timeline.get("popups", []):
             try:
+                pop = None
                 if p["type"] == "image":
                     pop = ImageClip(p["path"]).with_duration(p["duration"]).with_start(p["at"])
                     resources_to_close.append(pop)
                     pop = pop.resized(height=int(H*0.2))
+                elif p["type"] == "text":
+                    p_text = p.get("text", p.get("path", "TEXT"))
+                    pop = TextClip(font=font_path, text=p_text, font_size=int(H*0.08), color="white", bg_color="black")
+                    pop = pop.with_duration(p["duration"]).with_start(p["at"])
+                    resources_to_close.append(pop)
+                elif p["type"] == "shape":
+                    color = p.get("color", "red")
+                    c_map = {"red": (255,0,0), "green": (0,255,0), "blue": (0,0,255), "white": (255,255,255), "black": (0,0,0)}
+                    rgb = c_map.get(color.lower(), (255,0,0))
+                    size = p.get("size", 200)
+                    pop = ColorClip(size=(size, size), color=rgb).with_duration(p["duration"]).with_start(p["at"])
+                    resources_to_close.append(pop)
+
+                if pop:
                     pos = p.get("position", "center")
-                    if pos == "top-right":
-                        pop = pop.with_position(("right", "top"))
-                    else:
-                        pop = pop.with_position("center")
+                    if pos == "top": pos_tuple = ("center", "top")
+                    elif pos == "bottom": pos_tuple = ("center", "bottom")
+                    elif pos == "left": pos_tuple = ("left", "center")
+                    elif pos == "right": pos_tuple = ("right", "center")
+                    else: pos_tuple = ("center", "center")
+                    pop = pop.with_position(pos_tuple)
+                    
+                    anim = p.get("animation", "none")
+                    if anim == "fade":
+                        pop = pop.with_effects([vfx.CrossFadeIn(0.5), vfx.CrossFadeOut(0.5)])
+                    elif anim == "slide":
+                        pop = pop.with_position(lambda t: ("center", int(H - (H/2)*(t/max(p["duration"], 0.1)))))
+                        
                     clips.append(pop)
             except Exception as e:
                 logger.warning(f"Failed to render popup {p}: {type(e).__name__}")

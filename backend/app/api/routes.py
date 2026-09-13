@@ -184,17 +184,28 @@ def update_timeline(job_id: str, timeline: dict):
         
     timeline["audio"] = old_timeline["audio"]
     
-    # Enforce scene timestamps
-    if len(timeline.get("scenes", [])) == len(old_timeline.get("scenes", [])):
-        for i, sc in enumerate(timeline["scenes"]):
-            sc["start"] = old_timeline["scenes"][i]["start"]
-            sc["end"] = old_timeline["scenes"][i]["end"]
+    # Enforce strict structural immutability
+    old_scenes = old_timeline.get("scenes", [])
+    new_scenes = timeline.get("scenes", [])
+    if len(new_scenes) != len(old_scenes):
+        raise HTTPException(status_code=400, detail="Scene count mismatch")
+    
+    for i, sc in enumerate(new_scenes):
+        if sc.get("id") != old_scenes[i].get("id"):
+            raise HTTPException(status_code=400, detail=f"Scene ID mismatch at index {i}")
+        # Always restore original timestamps
+        sc["start"] = old_scenes[i]["start"]
+        sc["end"] = old_scenes[i]["end"]
             
-    # Enforce caption timestamps
-    if len(timeline.get("captions", [])) == len(old_timeline.get("captions", [])):
-        for i, cap in enumerate(timeline["captions"]):
-            cap["start"] = old_timeline["captions"][i]["start"]
-            cap["end"] = old_timeline["captions"][i]["end"]
+    old_caps = old_timeline.get("captions", [])
+    new_caps = timeline.get("captions", [])
+    if len(new_caps) != len(old_caps):
+        raise HTTPException(status_code=400, detail="Caption count mismatch")
+    
+    for i, cap in enumerate(new_caps):
+        # Always restore original timestamps
+        cap["start"] = old_caps[i]["start"]
+        cap["end"] = old_caps[i]["end"]
             
     try:
         assembler.validate(timeline)
@@ -205,12 +216,10 @@ def update_timeline(job_id: str, timeline: dict):
         json.dump(timeline, f, indent=2)
     return {"status": "ok"}
 
-def run_render_sync(job_id: str, draft_mode: bool):
-    import asyncio
+def run_render_sync(job_id: str, draft_mode: bool, loop: asyncio.AbstractEventLoop):
     def sync_notify(job_id, data):
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(notify_job_update(job_id, data))
+            asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
         except Exception:
             pass
             
@@ -239,12 +248,13 @@ class RenderRequest(BaseModel):
     draft_mode: bool = True
 
 @router.post("/jobs/{job_id}/render")
-def render_job(job_id: str, req: RenderRequest, background_tasks: BackgroundTasks):
+async def render_job(job_id: str, req: RenderRequest, background_tasks: BackgroundTasks):
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    background_tasks.add_task(run_render_sync, job_id, req.draft_mode)
-    return {"status": "queued"}
+    loop = asyncio.get_running_loop()
+    background_tasks.add_task(run_render_sync, job_id, req.draft_mode, loop)
+    return {"status": "ok"}
 
 # --- Settings API ---
 SETTINGS_PATH = DATA / "settings.json"

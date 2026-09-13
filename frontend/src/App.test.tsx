@@ -104,5 +104,23 @@ describe('EditorView Interactions', () => {
       fireEvent.change(motionSelect, { target: { value: 'kenburns_in' } });
       expect(motionSelect).toHaveValue('kenburns_in');
     }
+    
+    // Test Re-render / Save payload
+    let putPayload = null;
+    global.fetch = async (url, options) => {
+      if (options?.method === 'PUT' && url.toString().includes('timeline')) {
+        putPayload = JSON.parse(options.body as string);
+        return { ok: true } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    };
+    
+    fireEvent.click(getByText(/Re-render Draft/i));
+    await waitFor(() => expect(putPayload).not.toBeNull());
+    
+    expect(putPayload.scenes[0].motion).toBe('kenburns_in');
+    expect(putPayload.captions[0].word).toBe('edited');
+    expect(putPayload.popups.length).toBe(1);
+    expect(putPayload.popups[0].type).toBe('text');
   });
 });
