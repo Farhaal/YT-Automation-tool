@@ -3,6 +3,7 @@
   "title": "OpenReel Timeline",
   "type": "object",
   "required": ["version", "resolution", "audio", "scenes", "captions"],
+  "additionalProperties": false,
   "properties": {
     "version": {
       "type": "integer"
@@ -10,6 +11,7 @@
     "resolution": {
       "type": "object",
       "required": ["width", "height", "fps"],
+      "additionalProperties": false,
       "properties": {
         "width": { "type": "integer" },
         "height": { "type": "integer" },
@@ -19,39 +21,36 @@
     "audio": {
       "type": "object",
       "required": ["path", "duration"],
+      "additionalProperties": false,
       "properties": {
         "path": { "type": "string" },
-        "duration": { "type": "number" }
+        "duration": { "type": "number", "minimum": 0 }
       }
     },
     "scenes": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "start", "end", "text", "asset"],
+        "required": ["id", "start", "end", "text"],
+        "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
-          "start": { "type": "number" },
-          "end": { "type": "number" },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
           "text": { "type": "string" },
           "asset": {
-            "type": ["object", "null"],
-            "required": ["type", "path", "source", "author", "license", "url"],
-            "properties": {
-              "type": { "type": "string", "enum": ["video", "image"] },
-              "path": { "type": "string" },
-              "source": { "type": "string" },
-              "author": { "type": "string" },
-              "license": { "type": "string" },
-              "url": { "type": "string" }
-            }
+            "$ref": "#/definitions/AssetMetadata"
+          },
+          "backup_asset": {
+            "$ref": "#/definitions/AssetMetadata"
           },
           "motion": { "type": "string" },
           "transition_out": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
               "type": { "type": "string" },
-              "duration": { "type": "number" }
+              "duration": { "type": "number", "minimum": 0 }
             }
           }
         }
@@ -62,10 +61,11 @@
       "items": {
         "type": "object",
         "required": ["word", "start", "end"],
+        "additionalProperties": false,
         "properties": {
           "word": { "type": "string" },
-          "start": { "type": "number" },
-          "end": { "type": "number" }
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 }
         }
       }
     },
@@ -73,9 +73,10 @@
       "type": "array",
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "at": { "type": "number" },
-          "duration": { "type": "number" },
+          "at": { "type": "number", "minimum": 0 },
+          "duration": { "type": "number", "minimum": 0 },
           "type": { "type": "string" },
           "path": { "type": "string" },
           "position": { "type": "string" },
@@ -85,10 +86,31 @@
     },
     "music": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "path": { "type": "string" },
         "gain_db": { "type": "number" },
         "duck_under_voice": { "type": "boolean" }
+      }
+    }
+  },
+  "definitions": {
+    "AssetMetadata": {
+      "type": ["object", "null"],
+      "required": ["type", "path", "source", "author", "license", "url", "asset_key", "provider_asset_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["video", "image"] },
+        "path": { "type": ["string", "null"] },
+        "source": { "type": "string" },
+        "author": { "type": "string" },
+        "license": { "type": "string" },
+        "url": { "type": "string" },
+        "asset_key": { "type": "string" },
+        "provider_asset_id": { "type": "string" },
+        "license_url": { "type": ["string", "null"] },
+        "attribution_required": { "type": "boolean" },
+        "attribution_text": { "type": ["string", "null"] }
       }
     }
   }
