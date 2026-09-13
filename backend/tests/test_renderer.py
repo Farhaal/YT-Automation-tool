@@ -1,3 +1,4 @@
+import os
 import json
 import pytest
 import subprocess
@@ -24,7 +25,6 @@ def create_test_media(temp_dir: Path):
     # Image (1 second)
     iclip = ColorClip(size=(320, 240), color=(0, 255, 0)).with_duration(1.0)
     img_path = temp_dir / "test_img.png"
-    # MoviePy ColorClip doesn't have save_frame directly in older versions, let's just use PIL
     from PIL import Image
     im = Image.new("RGB", (320, 240), "green")
     im.save(img_path)
@@ -102,15 +102,17 @@ def test_renderer_pipeline(tmp_path):
     with open(timeline_path, "w", encoding="utf-8") as f:
         json.dump(timeline, f)
         
-    # Test Draft mode
-    draft_path = render_timeline(timeline_path, draft_mode=True)
+    # Test Draft mode with custom output path
+    draft_out = tmp_path / "custom_draft.mp4"
+    draft_path = render_timeline(timeline_path, draft_mode=True, output_path=draft_out)
+    assert draft_path == draft_out
     assert draft_path.exists()
     assert draft_path.stat().st_size > 0
     draft_dur = get_ffprobe_duration(draft_path)
     print(f"Draft Render Output: {draft_path} | Duration: {draft_dur}")
     assert abs(draft_dur - 2.0) < 0.2
     
-    # Test Final mode
+    # Test Final mode with default output path
     final_path = render_timeline(timeline_path, draft_mode=False)
     assert final_path.exists()
     assert final_path.stat().st_size > 0
@@ -118,11 +120,19 @@ def test_renderer_pipeline(tmp_path):
     print(f"Final Render Output: {final_path} | Duration: {final_dur}")
     assert abs(final_dur - 2.0) < 0.2
     
-    nvenc_avail = has_nvenc()
-    print(f"NVENC Available: {nvenc_avail}")
+    # Assert JSON file is unchanged
+    with open(timeline_path, "r", encoding="utf-8") as f:
+        timeline_after = json.load(f)
+    assert timeline == timeline_after
+    
+    # Verify closing by deleting media
+    try:
+        os.remove(media["video"])
+        os.remove(media["audio"])
+    except OSError as e:
+        pytest.fail(f"Files were not closed properly! {e}")
     
 def test_fallback_encoder_when_nvenc_false(tmp_path, monkeypatch):
-    # Force has_nvenc to false
     import backend.app.services.renderer as r
     monkeypatch.setattr(r, "has_nvenc", lambda: False)
     
@@ -133,8 +143,7 @@ def test_fallback_encoder_when_nvenc_false(tmp_path, monkeypatch):
         "audio": {"path": media["audio"], "duration": 1.0},
         "scenes": [
             {"id": "s1", "start": 0.0, "end": 1.0, "text": "Fallback", "asset": None}
-        ],
-        "captions": []
+        ]
     }
     timeline_path = tmp_path / "timeline.json"
     with open(timeline_path, "w") as f:
@@ -143,3 +152,75 @@ def test_fallback_encoder_when_nvenc_false(tmp_path, monkeypatch):
     out_path = render_timeline(timeline_path)
     assert out_path.exists()
     assert abs(get_ffprobe_duration(out_path) - 1.0) < 0.2
+    
+    try:
+        os.remove(media["audio"])
+    except OSError:
+        pass
+
+def test_nvenc_retry_success(tmp_path, monkeypatch):
+    import backend.app.services.renderer as r
+    import moviepy.video.VideoClip as vc
+    
+    monkeypatch.setattr(r, "has_nvenc", lambda: True)
+    
+    orig_write = vc.VideoClip.write_videofile
+    def mock_write(self, filename, **kwargs):
+        if kwargs.get("codec") == "h264_nvenc":
+            raise RuntimeError("Fake NVENC hardware encoding failure")
+        return orig_write(self, filename, **kwargs)
+        
+    monkeypatch.setattr(vc.VideoClip, "write_videofile", mock_write)
+    
+    media = create_test_media(tmp_path)
+    timeline = {
+        "version": 1,
+        "resolution": {"width": 320, "height": 240, "fps": 10},
+        "audio": {"path": media["audio"], "duration": 1.0},
+        "scenes": [
+            {"id": "s1", "start": 0.0, "end": 1.0, "text": "Retry", "asset": None}
+        ]
+    }
+    timeline_path = tmp_path / "timeline.json"
+    with open(timeline_path, "w") as f:
+        json.dump(timeline, f)
+        
+    # Should catch the Fake NVENC failure and fallback to libx264
+    out_path = render_timeline(timeline_path)
+    assert out_path.exists()
+    assert abs(get_ffprobe_duration(out_path) - 1.0) < 0.2
+
+def test_broken_asset_fallback_and_timeline_immutable(tmp_path):
+    media = create_test_media(tmp_path)
+    
+    timeline = {
+        "version": 1,
+        "resolution": {"width": 320, "height": 240, "fps": 10},
+        "audio": {"path": media["audio"], "duration": 1.0},
+        "scenes": [
+            {
+                "id": "s1",
+                "start": 0.0,
+                "end": 1.0,
+                "text": "Broken Media Scene",
+                "asset": {
+                    "type": "video",
+                    "path": "C:/fake/path/that/does/not/exist.mp4",
+                    "source": "mock"
+                }
+            }
+        ]
+    }
+    
+    timeline_path = tmp_path / "timeline.json"
+    with open(timeline_path, "w") as f:
+        json.dump(timeline, f)
+        
+    out_path = render_timeline(timeline_path)
+    assert out_path.exists()
+    assert abs(get_ffprobe_duration(out_path) - 1.0) < 0.2
+    
+    # Assert JSON file is unchanged
+    with open(timeline_path, "r", encoding="utf-8") as f:
+        timeline_after = json.load(f)
+    assert timeline == timeline_after
