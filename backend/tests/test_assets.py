@@ -207,7 +207,7 @@ def test_asset_manager_comprehensive(mock_httpx):
         # This explicitly proves the "relevance-first" ranking policy!
         backup = s1.get("backup_asset")
         assert backup is not None
-        assert backup["asset_key"] == "Openverse:ov_img"
+        assert backup["asset_key"] == "Wikimedia:999"
         assert backup["query"] == "primary"
         
         # Ensure httpx.stream was NOT called for secondary_vid because we pre-cached it
@@ -276,3 +276,49 @@ def test_missing_keys_fallback(mock_httpx):
         url = call[0][0]
         assert "pexels" not in url
         assert "pixabay" not in url
+
+def test_lexicographic_ranking_regression():
+    # Prove that secondary-query quality bonuses can NEVER outrank a primary-query candidate
+    # solely due to non-relevance traits (e.g. video, 4k, no attribution).
+    manager = AssetManager(cache_dir=Path("/tmp/fake"))
+    
+    from backend.app.services.assets import AssetMetadata
+    
+    primary_candidate = AssetMetadata(
+        provider="Openverse",
+        provider_asset_id="1",
+        asset_key="Openverse:1",
+        media_url="http://img",
+        media_type="image",
+        width=800,
+        height=600,
+        attribution_required=True,
+        query="primary",
+        query_priority=0,      # Primary query
+        result_position=0      # First result
+    )
+    
+    secondary_candidate = AssetMetadata(
+        provider="Pexels",
+        provider_asset_id="2",
+        asset_key="Pexels:2",
+        media_url="http://vid",
+        media_type="video",     # Better media type
+        width=3840,             # Better resolution (4k)
+        height=2160,
+        duration=20.0,          # Better duration
+        attribution_required=False, # Better attribution
+        query="secondary",
+        query_priority=1,       # Secondary query (worse)
+        result_position=0
+    )
+    
+    assets = [secondary_candidate, primary_candidate]
+    ranked = manager.rank_assets(assets, orientation="landscape", scene_duration=5.0)
+    
+    # Despite the secondary candidate being a 4K, attribution-free video of perfect duration,
+    # the primary candidate (a low-res, attribution-required image) MUST win because
+    # its query_priority (0) strictly beats the secondary's query_priority (1) in a tuple comparison.
+    assert ranked[0].asset_key == "Openverse:1"
+    assert ranked[1].asset_key == "Pexels:2"
+

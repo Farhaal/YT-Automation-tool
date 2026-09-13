@@ -22,50 +22,44 @@ class AssetManager:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float) -> List[AssetMetadata]:
-        def score(a: AssetMetadata) -> float:
-            s = 0.0
+        def score(a: AssetMetadata) -> tuple:
+            # 1. Query priority (lower index is better, use negative to sort descending properly)
+            pri_query = -a.query_priority
             
-            # 1. Relevance signal (Highest precedence)
-            # Lower query_priority is better (starts at 0).
-            # Lower result_position is better (starts at 0).
-            # Query priority heavily outweighs result position.
-            s += (1000 - (a.query_priority * 100) - (a.result_position * 5))
+            # 2. Result position (lower index is better)
+            pri_pos = -a.result_position
             
-            # 2. Media Type
-            if a.media_type == "video":
-                s += 50
-                
-            # 3. Resolution
-            if a.width >= 1920:
-                s += 20
-            elif a.width >= 1080:
-                s += 10
-                
+            # 3. Media Type
+            pri_media = 1 if a.media_type == "video" else 0
+            
             # 4. Orientation match
             is_landscape = a.width > a.height
             is_portrait = a.height > a.width
             is_square = a.width == a.height
             
+            pri_orientation = 0
             if orientation == "landscape" and is_landscape:
-                s += 15
+                pri_orientation = 1
             elif orientation == "portrait" and is_portrait:
-                s += 15
+                pri_orientation = 1
             elif orientation == "square" and is_square:
-                s += 15
+                pri_orientation = 1
                 
-            # 5. Usable duration
-            # Penalize videos that are shorter than the scene duration
+            # 5. Resolution (Width)
+            pri_res = a.width
+            
+            # 6. Duration suitability
+            pri_dur = 0
             if a.media_type == "video" and a.duration > 0:
                 if a.duration >= scene_duration:
-                    s += 10
+                    pri_dur = 1
                 else:
-                    s -= 20
+                    pri_dur = -1
                     
-            # 6. Attribution preference
-            if not a.attribution_required:
-                s += 5
-                
-            return s
+            # 7. Attribution preference
+            pri_attr = 1 if not a.attribution_required else 0
+            
+            return (pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
 
         # Filter out used assets by composite asset_key
         unused = [a for a in assets if a.asset_key not in self.used_asset_keys]
