@@ -44,14 +44,33 @@ def test_synthesize():
     assert "audio_path" in data
     assert "transcription" in data
     
-    # Verify the audio file was actually created
-    assert Path(data["audio_path"]).exists()
+    audio_path = Path(data["audio_path"])
+    assert audio_path.exists(), "Audio file was not created"
+    assert os.path.getsize(audio_path) > 1024, "Audio file is suspiciously small or empty"
     
-    # Verify the transcription has words
     words = data["transcription"]["words"]
-    assert len(words) > 0
+    assert len(words) > 0, "No words returned from transcription"
     
-    print("\n--- TTS + Alignment Sync Test ---")
+    # Check timings are ordered and valid
+    for i in range(len(words)):
+        assert words[i]["start"] <= words[i]["end"], "Word end is before word start"
+        if i > 0:
+            assert words[i]["start"] >= words[i-1]["start"], "Word starts are not monotonically increasing"
+            
+    # Normalize input and output words for comparison
+    import re
+    def normalize(text_val):
+        return re.sub(r'[^\w\s]', '', text_val).lower().strip()
+        
+    input_normalized_words = normalize(text).split()
+    output_normalized_words = [normalize(w["word"]) for w in words]
+    
+    # A substantial match is expected, allowing for TTS engine mispronunciations or transcriber differences
+    # E.g. we expect at least 3 matching words in this short sentence
+    matches = sum(1 for w in input_normalized_words if w in output_normalized_words)
+    assert matches >= len(input_normalized_words) // 2, f"Transcription heavily mismatched TTS input: {output_normalized_words}"
+    
+    print("\n--- P3 TTS Test Output (Requires manual listening check for actual sync accuracy) ---")
     for word_obj in words[:10]:
         print(f"[{word_obj['start']:.2f}s - {word_obj['end']:.2f}s] {word_obj['word']}")
-    print("---------------------------------")
+    print("-------------------------------------------------------------------------------------")
