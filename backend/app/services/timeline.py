@@ -78,12 +78,19 @@ class TimelineAssembler:
             "popups": []
         }
         
-        # Schema Validation
+        self.validate(timeline)
+        return timeline
+
+    def validate(self, timeline: Dict[str, Any]):
         try:
             jsonschema.validate(instance=timeline, schema=self.schema)
         except jsonschema.exceptions.ValidationError as e:
             logger.error(f"Timeline validation failed: {e.message}")
             raise ValueError(f"Invalid timeline generated: {e.message}")
+            
+        audio_duration = timeline["audio"]["duration"]
+        timeline_scenes = timeline.get("scenes", [])
+        captions = timeline.get("captions", [])
             
         # Semantic Validation
         last_scene_end = 0.0
@@ -113,5 +120,3 @@ class TimelineAssembler:
             if w["end"] > audio_duration:
                 raise ValueError(f"Caption word '{w['word']}' end exceeds audio_duration")
             last_word_end = max(last_word_end, w["end"])
-            
-        return timeline

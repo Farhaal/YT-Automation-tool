@@ -17,7 +17,27 @@ export default function EditorView({ jobId }: { jobId: string }) {
         loadTimeline();
       }
     };
-    return () => ws.close();
+    
+    // Fallback polling
+    const interval = setInterval(() => {
+      fetch(`http://localhost:8000/jobs/${jobId}`).then(r => r.json()).then(data => {
+        setJob(prev => {
+          if (data.status === 'COMPLETED' || data.status === 'ERROR') {
+             clearInterval(interval);
+          }
+          if (prev?.status === 'COMPLETED' || prev?.status === 'ERROR') return prev;
+          if (data.status === 'COMPLETED' && data.timeline_path && prev?.status !== 'COMPLETED') {
+            loadTimeline();
+          }
+          return data;
+        });
+      });
+    }, 2000);
+
+    return () => {
+      ws.close();
+      clearInterval(interval);
+    };
   }, [jobId]);
 
   const loadTimeline = () => {
@@ -136,10 +156,91 @@ export default function EditorView({ jobId }: { jobId: string }) {
                     <AlertTriangle className="w-4 h-4" /> Missing Asset - Neutral Fallback Card will be rendered
                   </div>
                 )}
+                
+                <div className="mt-2 grid grid-cols-2 gap-4 bg-white p-2 rounded border text-sm">
+                  <div>
+                    <label className="block text-gray-600 text-xs font-bold mb-1">Motion</label>
+                    <select 
+                      value={s.motion || 'none'} 
+                      onChange={(e) => {
+                        const t = { ...timeline };
+                        t.scenes[idx].motion = e.target.value;
+                        setTimeline(t);
+                      }}
+                      className="w-full border rounded p-1"
+                    >
+                      <option value="none">None</option>
+                      <option value="kenburns_in">Ken Burns In</option>
+                      <option value="kenburns_out">Ken Burns Out</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-600 text-xs font-bold mb-1">Transition Out</label>
+                    <select 
+                      value={s.transition_out?.type || 'none'} 
+                      onChange={(e) => {
+                        const t = { ...timeline };
+                        if (e.target.value === 'none') {
+                          delete t.scenes[idx].transition_out;
+                        } else {
+                          t.scenes[idx].transition_out = { type: e.target.value, duration: 0.4 };
+                        }
+                        setTimeline(t);
+                      }}
+                      className="w-full border rounded p-1"
+                    >
+                      <option value="none">None</option>
+                      <option value="crossfade">Crossfade</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="mt-1">
+                  <button 
+                    onClick={() => {
+                      const t = { ...timeline };
+                      if (!t.popups) t.popups = [];
+                      t.popups.push({ at: s.start, duration: Math.min(2.0, s.end - s.start), type: 'text', path: 'CALLOUT TEXT', position: 'center', animation: 'fade' });
+                      setTimeline(t);
+                    }}
+                    className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
+                  >
+                    + Add Popup Overlay
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
+        
+        {timeline.popups && timeline.popups.length > 0 && (
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-bold text-lg mb-4 border-b pb-2">Popups / Overlays</h3>
+            <div className="space-y-2">
+              {timeline.popups.map((p: any, idx: number) => (
+                <div key={idx} className="flex gap-2 text-sm items-center border p-2 rounded">
+                  <span className="font-mono text-gray-500 w-16">{p.at.toFixed(1)}s</span>
+                  <select 
+                    value={p.type} 
+                    onChange={e => { const t = {...timeline}; t.popups[idx].type = e.target.value; setTimeline(t); }}
+                    className="border rounded p-1"
+                  >
+                    <option value="text">Text Callout</option>
+                    <option value="image">Image Overlay</option>
+                  </select>
+                  <input 
+                    type="text" 
+                    value={p.path} 
+                    onChange={e => { const t = {...timeline}; t.popups[idx].path = e.target.value; setTimeline(t); }}
+                    className="border rounded px-2 py-1 flex-1"
+                    placeholder="Text or Image Path"
+                  />
+                  <button onClick={() => { const t = {...timeline}; t.popups.splice(idx,1); setTimeline(t); }} className="text-red-500 font-bold px-2">X</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white p-4 rounded shadow">
           <h3 className="font-bold text-lg mb-4 border-b pb-2">Captions</h3>

@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException,
 from pydantic import BaseModel
 import uuid
 import shutil
+import asyncio
 import json
 from pathlib import Path
 from typing import Dict, List, Any
@@ -26,13 +27,10 @@ async def notify_job_update(job_id: str, data: dict):
         for ws in dead_ws:
             active_connections[job_id].remove(ws)
 
-def run_job_pipeline_sync(job_id: str):
-    import asyncio
-    
+def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop):
     def sync_notify(job_id, data):
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(notify_job_update(job_id, data))
+            asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
         except Exception:
             pass
 
@@ -58,8 +56,8 @@ def run_job_pipeline_sync(job_id: str):
         words = transcription.get("words", [])
         
         update(50, "Segmenting scenes")
-        from backend.app.services.nlp import segment_into_scenes
-        scenes = segment_into_scenes(words, script)
+        from backend.app.services.nlp import process_script_to_scenes
+        scenes = process_script_to_scenes(words)
         
         update(70, "Finding assets")
         from backend.app.services.assets.manager import AssetManager
@@ -71,17 +69,7 @@ def run_job_pipeline_sync(job_id: str):
         if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
         
         asset_manager = AssetManager(cache_dir=DATA / "assets")
-        
-        for scene in scenes:
-            scene_dur = scene["end"] - scene["start"]
-            candidates = asset_manager.search(scene["text"], orientation="portrait", scene_duration=scene_dur)
-            if candidates:
-                scene["asset"] = candidates[0].model_dump()
-                if len(candidates) > 1:
-                    scene["backup_asset"] = candidates[1].model_dump()
-            else:
-                scene["asset"] = None
-                scene["backup_asset"] = None
+        scenes = asset_manager.select_assets_for_scenes(scenes, orientation="portrait")
                 
         update(80, "Assembling timeline")
         from backend.app.services.timeline import TimelineAssembler
@@ -122,16 +110,19 @@ def health_check():
     return {"status": "ok"}
 
 @router.post("/generate/script")
-def generate_from_script(req: GenerateRequest, background_tasks: BackgroundTasks):
+async def generate_from_script(req: GenerateRequest, background_tasks: BackgroundTasks):
+    import asyncio
     if not req.script.strip():
         raise HTTPException(status_code=400, detail="Script cannot be empty")
     job_id = str(uuid.uuid4())
     job_manager.create_job(job_id, script=req.script)
-    background_tasks.add_task(run_job_pipeline_sync, job_id)
+    loop = asyncio.get_running_loop()
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop)
     return job_manager.get_job(job_id)
 
 @router.post("/generate/audio")
-def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...)):
+async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...)):
+    import asyncio
     job_id = str(uuid.uuid4())
     temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
     temp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,7 +130,8 @@ def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFil
         shutil.copyfileobj(audio_file.file, buffer)
         
     job_manager.create_job(job_id, audio_path=str(temp_path))
-    background_tasks.add_task(run_job_pipeline_sync, job_id)
+    loop = asyncio.get_running_loop()
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop)
     return job_manager.get_job(job_id)
 
 @router.get("/jobs/{job_id}")
@@ -155,6 +147,12 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
     if job_id not in active_connections:
         active_connections[job_id] = []
     active_connections[job_id].append(websocket)
+    
+    # Send current state immediately
+    job = job_manager.get_job(job_id)
+    if job:
+        await websocket.send_json(job)
+        
     try:
         while True:
             await websocket.receive_text()
@@ -177,15 +175,31 @@ def update_timeline(job_id: str, timeline: dict):
         raise HTTPException(status_code=404, detail="Timeline not found")
         
     from backend.app.services.timeline import TimelineAssembler
-    import jsonschema
     schema_path = Path(__file__).parent.parent.parent.parent / "shared" / "timeline.schema.json"
-    with open(schema_path, "r", encoding="utf-8") as f:
-        schema = json.load(f)
+    assembler = TimelineAssembler(schema_path=schema_path)
         
+    # Enforce timestamp immutability from original timeline
+    with open(job["timeline_path"], "r", encoding="utf-8") as f:
+        old_timeline = json.load(f)
+        
+    timeline["audio"] = old_timeline["audio"]
+    
+    # Enforce scene timestamps
+    if len(timeline.get("scenes", [])) == len(old_timeline.get("scenes", [])):
+        for i, sc in enumerate(timeline["scenes"]):
+            sc["start"] = old_timeline["scenes"][i]["start"]
+            sc["end"] = old_timeline["scenes"][i]["end"]
+            
+    # Enforce caption timestamps
+    if len(timeline.get("captions", [])) == len(old_timeline.get("captions", [])):
+        for i, cap in enumerate(timeline["captions"]):
+            cap["start"] = old_timeline["captions"][i]["start"]
+            cap["end"] = old_timeline["captions"][i]["end"]
+            
     try:
-        jsonschema.validate(instance=timeline, schema=schema)
-    except jsonschema.exceptions.ValidationError as e:
-        raise HTTPException(status_code=400, detail=f"Timeline validation failed: {e.message}")
+        assembler.validate(timeline)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
         
     with open(job["timeline_path"], "w", encoding="utf-8") as f:
         json.dump(timeline, f, indent=2)
@@ -281,3 +295,18 @@ def delete_setting(provider: str):
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
     return get_settings()
+
+from fastapi.responses import FileResponse
+@router.get("/media")
+def get_media(path: str):
+    p = Path(path)
+    if not p.exists() or not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    # For security, could check if p is inside DATA dir
+    try:
+        if not p.resolve().is_relative_to(DATA.resolve()):
+            raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return FileResponse(p)
+

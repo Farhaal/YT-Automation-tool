@@ -30,3 +30,79 @@ describe('Frontend Component Tests', () => {
     expect(getByText(/Openverse & Wikimedia/i)).toBeInTheDocument();
   });
 });
+
+import { waitFor } from '@testing-library/react';
+import EditorView from './EditorView';
+
+describe('EditorView Interactions', () => {
+  it('handles polling and websocket completion, backup swap, and editing', async () => {
+    // Mock fetch for initial job load, then polling, then timeline
+    let fetchCount = 0;
+    global.fetch = async (url) => {
+      if (url.toString().includes('timeline')) {
+        return {
+          json: async () => ({
+            audio: { duration: 10 },
+            scenes: [
+              { id: 's1', start: 0, end: 5, text: 'scene1', asset: { source: 'pexels' }, backup_asset: { source: 'pixabay' } }
+            ],
+            captions: [{ word: 'test', start: 0, end: 1 }],
+            popups: []
+          })
+        } as Response;
+      }
+      
+      // Simulate progressing -> completed
+      fetchCount++;
+      if (fetchCount === 1) {
+        return { json: async () => ({ status: 'PROCESSING', progress: 50, stage: 'Segmenting' }) } as Response;
+      }
+      return { json: async () => ({ status: 'COMPLETED', timeline_path: 'ok' }) } as Response;
+    };
+
+    // Mock WebSocket
+    class MockWS {
+      onmessage: any = null;
+      close = () => {};
+      constructor() {
+        setTimeout(() => {
+          if (this.onmessage) {
+             this.onmessage({ data: JSON.stringify({ status: 'COMPLETED', timeline_path: 'ok' }) });
+          }
+        }, 100);
+      }
+    }
+    (global as any).WebSocket = MockWS;
+
+    const { getByText, findByText, getByRole, getAllByRole } = render(<EditorView jobId="123" />);
+    
+    // Check progressing state
+    await waitFor(() => expect(getByText(/Generating Video/i)).toBeInTheDocument());
+    
+    // Wait for completion and timeline to load
+    await waitFor(() => expect(getByText(/Draft Preview/i)).toBeInTheDocument(), { timeout: 2000 });
+    
+    // Backup swap
+    expect(getByText('pexels')).toBeInTheDocument();
+    fireEvent.click(getByText(/Swap Backup/i));
+    expect(getByText('pixabay')).toBeInTheDocument();
+    
+    // Edit caption
+    const capInput = getAllByRole('textbox')[0]; // The first one might be caption
+    fireEvent.change(capInput, { target: { value: 'edited' } });
+    expect(capInput).toHaveValue('edited');
+    
+    // Add popup
+    fireEvent.click(getByText(/\+ Add Popup Overlay/i));
+    await waitFor(() => expect(getByText(/Text Callout/i)).toBeInTheDocument());
+    
+    // Test motion dropdown
+    const selects = getAllByRole('combobox');
+    // Finds the Motion select (first select in the scene block usually)
+    const motionSelect = selects.find(s => s.innerHTML.includes('Ken Burns In'));
+    if (motionSelect) {
+      fireEvent.change(motionSelect, { target: { value: 'kenburns_in' } });
+      expect(motionSelect).toHaveValue('kenburns_in');
+    }
+  });
+});
