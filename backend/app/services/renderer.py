@@ -163,7 +163,7 @@ def render_timeline(timeline_path: Path, draft_mode: bool = False, output_path: 
             _run_render_pass(timeline, codec, output_path, draft_mode)
             return output_path
         except Exception as e:
-            logger.warning(f"Encoder {codec} failed with {type(e).__name__}: {str(e)[:100]}")
+            logger.warning(f"Encoder {codec} failed with {type(e).__name__}")
             if i == len(codecs_to_try) - 1:
                 raise e
                 
