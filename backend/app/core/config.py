@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     DEVICE: str = "auto"
     TTS_ENGINE: str = "pyttsx3"
     OLLAMA_URL: str = "http://localhost:11434"
+    USE_OLLAMA: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
