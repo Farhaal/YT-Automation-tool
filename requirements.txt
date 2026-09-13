@@ -1,0 +1,64 @@
+# OpenReel — Python dependencies
+# ---------------------------------------------------------------------------
+# Install into a PROJECT-LOCAL virtual environment (.venv) so nothing lands in
+# your system Python. Same steps on Windows and macOS:
+#
+#   Windows (PowerShell):  python  -m venv .venv;  .venv\Scripts\Activate.ps1
+#   macOS / Linux:         python3 -m venv .venv;  source .venv/bin/activate
+#   Then (both):           pip install -r requirements.txt
+#                          python -m spacy download en_core_web_sm
+#
+# This baseline runs 100% on CPU and behaves the same on Windows and macOS.
+# It automatically uses an NVIDIA RTX GPU for transcription when CUDA is present.
+# Optional higher-quality / GPU-only extras are listed at the bottom (commented)
+# and documented in BLUEPRINT.md — install them only when you want them.
+# ---------------------------------------------------------------------------
+
+# ---- Web API ----
+fastapi>=0.111
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pydantic>=2.7
+pydantic-settings>=2.3
+python-dotenv>=1.0
+
+# ---- HTTP clients (free stock-media APIs) ----
+httpx>=0.27
+requests>=2.32
+
+# ---- Speech-to-text + word-level timestamps ----
+# CTranslate2-based: CPU on every OS, auto-GPU on NVIDIA. No PyTorch required.
+faster-whisper>=1.0.3
+
+# ---- Text-to-speech (offline, cross-platform baseline) ----
+# Uses SAPI5 on Windows and NSSpeechSynthesizer on macOS — no model download.
+# Higher-quality neural voices (Piper / Kokoro) are optional upgrades below.
+pyttsx3>=2.90
+
+# ---- NLP: scene keywords (lightweight, no heavy ML) ----
+spacy>=3.7
+yake>=0.4.8
+
+# ---- Video rendering ----
+# imageio-ffmpeg bundles an ffmpeg binary, so nothing extra is needed to start.
+# For fast NVENC GPU encoding, install a system ffmpeg with nvenc (see docs).
+moviepy>=2.0
+imageio>=2.34
+imageio-ffmpeg>=0.5.1
+Pillow>=10.3
+numpy>=1.26
+
+# ---- Logging niceties ----
+rich>=13.7
+
+# ---------------------------------------------------------------------------
+# OPTIONAL UPGRADES — do NOT uncomment unless you want them. Some pull large
+# downloads or GPU-only wheels. See BLUEPRINT.md "License watch" first.
+#
+#   Tighter word alignment:      whisperx
+#   Neural TTS voices:           piper-tts            (or) kokoro-onnx  onnxruntime
+#   Smarter keyword embeddings:  keybert  sentence-transformers
+#   Semantic asset matching:     open-clip-torch  torch    (CLIP re-ranking)
+#   Asset upscaling (NVIDIA):    realesrgan  torch  torchvision
+#   NVIDIA transcription libs:   nvidia-cublas-cu12  nvidia-cudnn-cu12
+# ---------------------------------------------------------------------------

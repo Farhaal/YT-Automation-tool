@@ -1,0 +1,129 @@
+# ─────────────────────────────────────────────────────────
+#  Secrets & environment  (NEVER commit real keys)
+# ─────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.*
+credentials.json
+
+# ─────────────────────────────────────────────────────────
+#  Python  (backend)
+# ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ─────────────────────────────────────────────────────────
+#  Node  (frontend / renderer)
+# ─────────────────────────────────────────────────────────
+node_modules/
+.pnp.*
+.yarn/*
+.vite/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─────────────────────────────────────────────────────────
+#  Build output
+# ─────────────────────────────────────────────────────────
+dist/
+build/
+target/          # Tauri / Rust
+src-tauri/target/
+
+# ─────────────────────────────────────────────────────────
+#  ML models & weights  (large; downloaded at runtime)
+# ─────────────────────────────────────────────────────────
+models/
+weights/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.gguf
+*.ckpt
+whisper_models/
+xtts_models/
+piper_voices/
+
+# ─────────────────────────────────────────────────────────
+#  Media cache & render output  (large / regenerable)
+# ─────────────────────────────────────────────────────────
+data/            # project-local models, caches, downloads, renders (containment)
+cache/
+asset_cache/
+downloads/
+tmp/
+temp/
+renders/
+output/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.aac
+*.flac
+# keep tiny demo clips if you add a samples/ folder:
+!samples/**
+
+# ─────────────────────────────────────────────────────────
+#  Logs
+# ─────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─────────────────────────────────────────────────────────
+#  OS cruft
+# ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────
+#  Editors / IDEs
+# ─────────────────────────────────────────────────────────
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.sample.json
+
+# ─────────────────────────────────────────────────────────
+#  AI coding-assistant artifacts  (keep the repo clean)
+#  These are local tool folders — they should never ship.
+# ─────────────────────────────────────────────────────────
+.antigravity/
+.cursor/
+.aider*
+.claude/
+.continue/
+.windsurf/
+.gemini/
+AGENTS.local.md
+
+# ─────────────────────────────────────────────────────────
+#  Local build scaffolding  (plan / guide / progress)
+#  Lives in the working folder so the agent can read + update
+#  it, but is NOT part of the shipped product.
+# ─────────────────────────────────────────────────────────
+dev/
