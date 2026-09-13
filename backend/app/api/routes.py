@@ -1,77 +1,283 @@
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 import uuid
 import shutil
+import json
 from pathlib import Path
+from typing import Dict, List, Any
 
 from backend.app.core.paths import DATA
 from backend.app.services.transcription import transcribe_audio
+from backend.app.services.job_manager import job_manager
+from backend.app.core.logger import logger
+from backend.app.core.config import settings
 
 router = APIRouter()
+active_connections: Dict[str, List[WebSocket]] = {}
+
+async def notify_job_update(job_id: str, data: dict):
+    if job_id in active_connections:
+        dead_ws = []
+        for ws in active_connections[job_id]:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead_ws.append(ws)
+        for ws in dead_ws:
+            active_connections[job_id].remove(ws)
+
+def run_job_pipeline_sync(job_id: str):
+    import asyncio
+    
+    def sync_notify(job_id, data):
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(notify_job_update(job_id, data))
+        except Exception:
+            pass
+
+    def update(progress, stage, status="PROCESSING", **kwargs):
+        job_manager.update_job(job_id, progress=progress, stage=stage, status=status, **kwargs)
+        job = job_manager.get_job(job_id)
+        sync_notify(job_id, job)
+        logger.info(f"Job {job_id} [{progress}%]: {stage}")
+
+    try:
+        job = job_manager.get_job(job_id)
+        audio_path = job.get("audio_path")
+        script = job.get("script")
+        
+        if not audio_path and script:
+            update(10, "Synthesizing audio")
+            from backend.app.services.tts import synthesize
+            audio_path = str(synthesize(script))
+            job_manager.update_job(job_id, audio_path=audio_path)
+            
+        update(30, "Transcribing")
+        transcription = transcribe_audio(audio_path)
+        words = transcription.get("words", [])
+        
+        update(50, "Segmenting scenes")
+        from backend.app.services.nlp import segment_into_scenes
+        scenes = segment_into_scenes(words, script)
+        
+        update(70, "Finding assets")
+        from backend.app.services.assets.manager import AssetManager
+        
+        # Load API keys from settings if they exist
+        s = load_settings()
+        import os
+        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]
+        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
+        
+        asset_manager = AssetManager(cache_dir=DATA / "assets")
+        
+        for scene in scenes:
+            scene_dur = scene["end"] - scene["start"]
+            candidates = asset_manager.search(scene["text"], orientation="portrait", scene_duration=scene_dur)
+            if candidates:
+                scene["asset"] = candidates[0].model_dump()
+                if len(candidates) > 1:
+                    scene["backup_asset"] = candidates[1].model_dump()
+            else:
+                scene["asset"] = None
+                scene["backup_asset"] = None
+                
+        update(80, "Assembling timeline")
+        from backend.app.services.timeline import TimelineAssembler
+        schema_path = Path(__file__).parent.parent.parent.parent / "shared" / "timeline.schema.json"
+        assembler = TimelineAssembler(schema_path=schema_path)
+        
+        audio_dur = transcription["segments"][-1]["end"] if transcription.get("segments") else 0.0
+        if audio_dur == 0.0:
+            import subprocess
+            res = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_path], capture_output=True, text=True)
+            try: audio_dur = float(res.stdout.strip())
+            except: audio_dur = 1.0
+
+        timeline = assembler.assemble(audio_path, audio_dur, words, scenes)
+        
+        timeline_path = DATA / "jobs" / f"{job_id}_timeline.json"
+        with open(timeline_path, "w", encoding="utf-8") as f:
+            json.dump(timeline, f, indent=2)
+            
+        update(90, "Rendering draft", timeline_path=str(timeline_path))
+        from backend.app.services.renderer import render_timeline
+        draft_video_path = render_timeline(timeline_path, draft_mode=True)
+        
+        update(100, "Done", status="COMPLETED", draft_video_path=str(draft_video_path))
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        job_manager.update_job(job_id, status="ERROR", stage="Failed", error=str(e))
+        job = job_manager.get_job(job_id)
+        sync_notify(job_id, job)
 
 class GenerateRequest(BaseModel):
-    # Depending on voice vs text path, we might have text or an audio file.
-    # For now we stub it.
-    text: str = ""
+    script: str = ""
 
 @router.get("/health")
 def health_check():
     return {"status": "ok"}
 
-@router.post("/transcribe")
-async def transcribe(audio_file: UploadFile = File(...)):
-    if not audio_file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided")
-        
-    temp_path = DATA / "tmp" / f"{uuid.uuid4()}_{audio_file.filename}"
+@router.post("/generate/script")
+def generate_from_script(req: GenerateRequest, background_tasks: BackgroundTasks):
+    if not req.script.strip():
+        raise HTTPException(status_code=400, detail="Script cannot be empty")
+    job_id = str(uuid.uuid4())
+    job_manager.create_job(job_id, script=req.script)
+    background_tasks.add_task(run_job_pipeline_sync, job_id)
+    return job_manager.get_job(job_id)
+
+@router.post("/generate/audio")
+def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...)):
+    job_id = str(uuid.uuid4())
+    temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
     temp_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(audio_file.file, buffer)
+        
+    job_manager.create_job(job_id, audio_path=str(temp_path))
+    background_tasks.add_task(run_job_pipeline_sync, job_id)
+    return job_manager.get_job(job_id)
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+@router.websocket("/jobs/{job_id}/ws")
+async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    await websocket.accept()
+    if job_id not in active_connections:
+        active_connections[job_id] = []
+    active_connections[job_id].append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket in active_connections[job_id]:
+            active_connections[job_id].remove(websocket)
+
+@router.get("/jobs/{job_id}/timeline")
+def get_timeline(job_id: str):
+    job = job_manager.get_job(job_id)
+    if not job or not job.get("timeline_path"):
+        raise HTTPException(status_code=404, detail="Timeline not found")
+    with open(job["timeline_path"], "r", encoding="utf-8") as f:
+        return json.load(f)
+
+@router.put("/jobs/{job_id}/timeline")
+def update_timeline(job_id: str, timeline: dict):
+    job = job_manager.get_job(job_id)
+    if not job or not job.get("timeline_path"):
+        raise HTTPException(status_code=404, detail="Timeline not found")
+        
+    from backend.app.services.timeline import TimelineAssembler
+    import jsonschema
+    schema_path = Path(__file__).parent.parent.parent.parent / "shared" / "timeline.schema.json"
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+        
+    try:
+        jsonschema.validate(instance=timeline, schema=schema)
+    except jsonschema.exceptions.ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Timeline validation failed: {e.message}")
+        
+    with open(job["timeline_path"], "w", encoding="utf-8") as f:
+        json.dump(timeline, f, indent=2)
+    return {"status": "ok"}
+
+def run_render_sync(job_id: str, draft_mode: bool):
+    import asyncio
+    def sync_notify(job_id, data):
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(notify_job_update(job_id, data))
+        except Exception:
+            pass
+            
+    job = job_manager.get_job(job_id)
+    timeline_path = job.get("timeline_path")
+    if not timeline_path: return
+    
+    job_manager.update_job(job_id, status="PROCESSING", stage="Rendering draft" if draft_mode else "Rendering final", progress=90)
+    sync_notify(job_id, job_manager.get_job(job_id))
     
     try:
-        with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(audio_file.file, buffer)
-            
-        result = transcribe_audio(str(temp_path))
-        return result
-    finally:
-        if temp_path.exists():
-            temp_path.unlink()
-
-class SynthesizeRequest(BaseModel):
-    text: str
-
-@router.post("/synthesize")
-def synthesize_and_align(req: SynthesizeRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
+        from backend.app.services.renderer import render_timeline
+        out_path = render_timeline(timeline_path, draft_mode=draft_mode)
         
-    from backend.app.services.tts import synthesize
-    
-    # 1. Synthesize text to audio
-    audio_path = synthesize(req.text)
-    
-    # 2. Run it through transcription to get words+timestamps
-    transcription = transcribe_audio(audio_path)
-    
-    # We could delete the audio_path if we just wanted the JSON,
-    # but the pipeline needs the audio file for the renderer.
-    # We'll return its path so the frontend/pipeline knows where it is.
+        if draft_mode:
+            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, draft_video_path=str(out_path))
+        else:
+            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, final_video_path=str(out_path))
+            
+    except Exception as e:
+        job_manager.update_job(job_id, status="ERROR", stage="Failed", error=str(e))
+        
+    sync_notify(job_id, job_manager.get_job(job_id))
+
+class RenderRequest(BaseModel):
+    draft_mode: bool = True
+
+@router.post("/jobs/{job_id}/render")
+def render_job(job_id: str, req: RenderRequest, background_tasks: BackgroundTasks):
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    background_tasks.add_task(run_render_sync, job_id, req.draft_mode)
+    return {"status": "queued"}
+
+# --- Settings API ---
+SETTINGS_PATH = DATA / "settings.json"
+
+class SettingsUpdate(BaseModel):
+    pexels_key: str = ""
+    pixabay_key: str = ""
+
+def load_settings():
+    if SETTINGS_PATH.exists():
+        try:
+            with open(SETTINGS_PATH, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"pexels_key": settings.PEXELS_API_KEY or "", "pixabay_key": settings.PIXABAY_API_KEY or ""}
+
+@router.get("/settings")
+def get_settings():
+    s = load_settings()
     return {
-        "audio_path": str(audio_path),
-        "transcription": transcription
+        "pexels": "Configured" if s.get("pexels_key") else "Not configured",
+        "pixabay": "Configured" if s.get("pixabay_key") else "Not configured",
+        "openverse": "No key required",
+        "wikimedia": "No key required"
     }
 
-@router.post("/generate")
-def generate_video(req: GenerateRequest, background_tasks: BackgroundTasks):
-    job_id = str(uuid.uuid4())
-    # In the future, we would start processing the audio/script here in background
-    return {"job_id": job_id, "status": "queued"}
+@router.post("/settings")
+def update_settings(req: SettingsUpdate):
+    s = load_settings()
+    if req.pexels_key: s["pexels_key"] = req.pexels_key
+    if req.pixabay_key: s["pixabay_key"] = req.pixabay_key
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(s, f)
+    settings.PEXELS_API_KEY = s["pexels_key"]
+    settings.PIXABAY_API_KEY = s["pixabay_key"]
+    return get_settings()
 
-@router.get("/status/{job_id}")
-def get_status(job_id: str):
-    # Stub: return a dummy status
-    return {"job_id": job_id, "status": "processing", "progress": 0.5}
-
-@router.post("/export/{job_id}")
-def export_video(job_id: str):
-    # Stub: start high-res render and export
-    return {"job_id": job_id, "status": "exporting"}
+@router.delete("/settings/{provider}")
+def delete_setting(provider: str):
+    s = load_settings()
+    if provider.lower() == "pexels":
+        s["pexels_key"] = ""
+        settings.PEXELS_API_KEY = ""
+    elif provider.lower() == "pixabay":
+        s["pixabay_key"] = ""
+        settings.PIXABAY_API_KEY = ""
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(s, f)
+    return get_settings()
