@@ -36,6 +36,30 @@ async def transcribe(audio_file: UploadFile = File(...)):
         if temp_path.exists():
             temp_path.unlink()
 
+class SynthesizeRequest(BaseModel):
+    text: str
+
+@router.post("/synthesize")
+def synthesize_and_align(req: SynthesizeRequest):
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+    from backend.app.services.tts import synthesize
+    
+    # 1. Synthesize text to audio
+    audio_path = synthesize(req.text)
+    
+    # 2. Run it through transcription to get words+timestamps
+    transcription = transcribe_audio(audio_path)
+    
+    # We could delete the audio_path if we just wanted the JSON,
+    # but the pipeline needs the audio file for the renderer.
+    # We'll return its path so the frontend/pipeline knows where it is.
+    return {
+        "audio_path": str(audio_path),
+        "transcription": transcription
+    }
+
 @router.post("/generate")
 def generate_video(req: GenerateRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())

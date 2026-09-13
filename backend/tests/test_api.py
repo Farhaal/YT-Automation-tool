@@ -34,3 +34,24 @@ def test_transcribe():
     for word_obj in data["words"][:10]:
         print(f"[{word_obj['start']:.2f}s - {word_obj['end']:.2f}s] {word_obj['word']}")
     print("-------------------------------")
+
+def test_synthesize():
+    text = "This is a synthesized test sentence."
+    response = client.post("/synthesize", json={"text": text})
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "audio_path" in data
+    assert "transcription" in data
+    
+    # Verify the audio file was actually created
+    assert Path(data["audio_path"]).exists()
+    
+    # Verify the transcription has words
+    words = data["transcription"]["words"]
+    assert len(words) > 0
+    
+    print("\n--- TTS + Alignment Sync Test ---")
+    for word_obj in words[:10]:
+        print(f"[{word_obj['start']:.2f}s - {word_obj['end']:.2f}s] {word_obj['word']}")
+    print("---------------------------------")
