@@ -25,14 +25,15 @@ def main():
     cuda_ok = False
     cuda_details = "(Not found)"
     try:
-        import torch
-        cuda_ok = torch.cuda.is_available()
-        if cuda_ok:
-            cuda_details = f"(Found: {torch.cuda.get_device_name(0)})"
+        import ctranslate2
+        cuda_count = ctranslate2.get_cuda_device_count()
+        if cuda_count > 0:
+            cuda_ok = True
+            cuda_details = f"(Found {cuda_count} CUDA device(s) via CTranslate2)"
         else:
-            cuda_details = "(CUDA not available in PyTorch)"
+            cuda_details = "(CUDA not available in CTranslate2)"
     except ImportError:
-         cuda_details = "(PyTorch not installed yet)"
+         cuda_details = "(CTranslate2 not installed yet)"
     
     print_status("CUDA / GPU", cuda_ok, cuda_details)
 

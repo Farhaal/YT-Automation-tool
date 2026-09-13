@@ -5,17 +5,15 @@ def run_startup_checks():
     logger.info("Starting OpenReel environment checks...")
 
     # GPU Check
-    cuda_available = False
     try:
-        import torch
-        cuda_available = torch.cuda.is_available()
-        if cuda_available:
-            logger.info(f"GPU: [bold green]Found {torch.cuda.get_device_name(0)}[/bold green]")
+        import ctranslate2
+        cuda_count = ctranslate2.get_cuda_device_count()
+        if cuda_count > 0:
+            logger.info(f"GPU: [bold green]Found {cuda_count} CUDA device(s) via CTranslate2[/bold green]")
         else:
-            logger.info("GPU: [bold yellow]CUDA not available in PyTorch, falling back to CPU[/bold yellow]")
+            logger.info("GPU: [bold yellow]CUDA not available in CTranslate2, falling back to CPU[/bold yellow]")
     except ImportError:
-        logger.info("GPU: [bold yellow]PyTorch not installed, checking without PyTorch...[/bold yellow]")
-        # Note: faster-whisper doesn't strictly need PyTorch, but for logging we usually check via torch.
+        logger.info("GPU: [bold yellow]CTranslate2 not installed, cannot verify GPU[/bold yellow]")
 
     # FFmpeg check
     ffmpeg_ok = False
