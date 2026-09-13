@@ -21,16 +21,27 @@ class AssetManager:
         self.cache_dir = cache_dir or (DATA / "assets")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def rank_assets(self, assets: List[AssetMetadata], orientation: str) -> List[AssetMetadata]:
-        def score(a: AssetMetadata) -> int:
-            s = 0
+    def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float) -> List[AssetMetadata]:
+        def score(a: AssetMetadata) -> float:
+            s = 0.0
+            
+            # 1. Relevance signal (Highest precedence)
+            # Lower query_priority is better (starts at 0).
+            # Lower result_position is better (starts at 0).
+            # Query priority heavily outweighs result position.
+            s += (1000 - (a.query_priority * 100) - (a.result_position * 5))
+            
+            # 2. Media Type
             if a.media_type == "video":
                 s += 50
+                
+            # 3. Resolution
             if a.width >= 1920:
                 s += 20
             elif a.width >= 1080:
                 s += 10
                 
+            # 4. Orientation match
             is_landscape = a.width > a.height
             is_portrait = a.height > a.width
             is_square = a.width == a.height
@@ -42,6 +53,15 @@ class AssetManager:
             elif orientation == "square" and is_square:
                 s += 15
                 
+            # 5. Usable duration
+            # Penalize videos that are shorter than the scene duration
+            if a.media_type == "video" and a.duration > 0:
+                if a.duration >= scene_duration:
+                    s += 10
+                else:
+                    s -= 20
+                    
+            # 6. Attribution preference
             if not a.attribution_required:
                 s += 5
                 
@@ -60,22 +80,29 @@ class AssetManager:
             if not queries:
                 queries = [scene["text"]]
                 
+            scene_duration = scene.get("end", 0.0) - scene.get("start", 0.0)
             candidates = []
             seen_keys = set()
-            for query in queries:
+            
+            for query_idx, query in enumerate(queries):
                 for provider in self.providers:
                     res = provider.search(query, orientation=orientation)
-                    for a in res:
+                    for pos_idx, a in enumerate(res):
+                        a.query = query
+                        a.query_priority = query_idx
+                        a.result_position = pos_idx
+                        
                         # Deduplicate by global composite asset_key
                         if a.asset_key not in seen_keys:
                             seen_keys.add(a.asset_key)
                             candidates.append(a)
-                    if len(candidates) > 20:
+                            
+                    if len(candidates) > 50:
                         break
-                if len(candidates) > 20:
+                if len(candidates) > 50:
                     break
                     
-            ranked = self.rank_assets(candidates, orientation)
+            ranked = self.rank_assets(candidates, orientation, scene_duration)
             
             best_asset = None
             backup_asset = None

@@ -23,5 +23,8 @@ class AssetMetadata(BaseModel):
     duration: float = 0.0
     
     query: Optional[str] = None
+    query_priority: int = 0
+    result_position: int = 0
+    
     local_path: Optional[str] = None
     cache_key: Optional[str] = None
