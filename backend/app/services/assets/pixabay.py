@@ -9,6 +9,10 @@ class PixabayProvider(AssetProvider):
     def __init__(self):
         super().__init__("Pixabay")
         self.api_key = settings.PIXABAY_API_KEY
+        if not self.api_key:
+            logger.info("Pixabay API key not configured. Pixabay will be disabled.")
+        else:
+            logger.info("Pixabay API key configured.")
 
     def search(self, query: str, orientation: str = "landscape") -> List[AssetMetadata]:
         if not self.api_key:
@@ -33,16 +37,20 @@ class PixabayProvider(AssetProvider):
                     if not best_file: continue
                     
                     results.append(AssetMetadata(
-                        id=str(v["id"]),
                         provider=self.name,
-                        url=best_file["url"],
-                        author=v.get("user", "Unknown"),
-                        license="Pixabay License",
+                        provider_asset_id=str(v["id"]),
+                        asset_key=f"{self.name}:{v['id']}",
+                        media_url=best_file["url"],
+                        source_page_url=v.get("pageURL"),
+                        author=v.get("user", "unknown"),
+                        license_name="Pixabay License",
+                        license_url="https://pixabay.com/service/license-summary/",
                         media_type="video",
                         width=best_file.get("width", 0),
                         height=best_file.get("height", 0),
                         duration=v.get("duration", 0.0),
-                        attribution_required=False
+                        attribution_required=False,
+                        query=query
                     ))
             
             # 2. Search Images
@@ -55,15 +63,19 @@ class PixabayProvider(AssetProvider):
                 data = resp.json()
                 for p in data.get("hits", []):
                     results.append(AssetMetadata(
-                        id=str(p["id"]),
                         provider=self.name,
-                        url=p.get("largeImageURL", p.get("webformatURL")),
-                        author=p.get("user", "Unknown"),
-                        license="Pixabay License",
+                        provider_asset_id=str(p["id"]),
+                        asset_key=f"{self.name}:{p['id']}",
+                        media_url=p.get("largeImageURL", p.get("webformatURL")),
+                        source_page_url=p.get("pageURL"),
+                        author=p.get("user", "unknown"),
+                        license_name="Pixabay License",
+                        license_url="https://pixabay.com/service/license-summary/",
                         media_type="image",
                         width=p.get("imageWidth", 0),
                         height=p.get("imageHeight", 0),
-                        attribution_required=False
+                        attribution_required=False,
+                        query=query
                     ))
         except Exception as e:
             logger.warning(f"Pixabay search failed for '{query}': {type(e).__name__}")

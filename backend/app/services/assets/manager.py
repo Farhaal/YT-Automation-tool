@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional
 from backend.app.core.paths import DATA
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
@@ -9,18 +9,17 @@ from backend.app.services.assets.pixabay import PixabayProvider
 from backend.app.services.assets.openverse import OpenverseProvider
 from backend.app.services.assets.wikimedia import WikimediaProvider
 
-CACHE_DIR = str(DATA / "assets")
-os.makedirs(CACHE_DIR, exist_ok=True)
-
 class AssetManager:
-    def __init__(self):
+    def __init__(self, cache_dir: Optional[Path] = None):
         self.providers = [
             PexelsProvider(),
             PixabayProvider(),
             OpenverseProvider(),
             WikimediaProvider()
         ]
-        self.used_asset_ids = set()
+        self.used_asset_keys = set()
+        self.cache_dir = cache_dir or (DATA / "assets")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def rank_assets(self, assets: List[AssetMetadata], orientation: str) -> List[AssetMetadata]:
         def score(a: AssetMetadata) -> int:
@@ -32,7 +31,6 @@ class AssetManager:
             elif a.width >= 1080:
                 s += 10
                 
-            # Orientation logic
             is_landscape = a.width > a.height
             is_portrait = a.height > a.width
             is_square = a.width == a.height
@@ -49,10 +47,10 @@ class AssetManager:
                 
             return s
 
-        # Filter out used assets unless we have to fallback
-        unused = [a for a in assets if a.id not in self.used_asset_ids]
+        # Filter out used assets by composite asset_key
+        unused = [a for a in assets if a.asset_key not in self.used_asset_keys]
         if not unused:
-            unused = assets  # Fallback to used if absolutely necessary
+            unused = assets
             
         return sorted(unused, key=score, reverse=True)
 
@@ -63,13 +61,14 @@ class AssetManager:
                 queries = [scene["text"]]
                 
             candidates = []
-            seen_ids = set()
+            seen_keys = set()
             for query in queries:
                 for provider in self.providers:
                     res = provider.search(query, orientation=orientation)
                     for a in res:
-                        if a.id not in seen_ids:
-                            seen_ids.add(a.id)
+                        # Deduplicate by global composite asset_key
+                        if a.asset_key not in seen_keys:
+                            seen_keys.add(a.asset_key)
                             candidates.append(a)
                     if len(candidates) > 20:
                         break
@@ -82,14 +81,13 @@ class AssetManager:
             backup_asset = None
             
             for asset in ranked:
-                # Find the provider instance that yielded this asset to download it
                 provider = next(p for p in self.providers if p.name == asset.provider)
-                local_path = provider.download(asset, CACHE_DIR)
+                local_path = provider.download(asset, self.cache_dir)
                 
                 if local_path:
                     if not best_asset:
                         best_asset = asset
-                        self.used_asset_ids.add(asset.id)
+                        self.used_asset_keys.add(asset.asset_key)
                     elif not backup_asset:
                         backup_asset = asset
                         break

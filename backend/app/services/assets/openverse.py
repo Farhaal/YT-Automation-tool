@@ -11,7 +11,6 @@ class OpenverseProvider(AssetProvider):
     def search(self, query: str, orientation: str = "landscape") -> List[AssetMetadata]:
         results = []
         try:
-            # Mostly images, videos are less stable in Openverse
             resp = httpx.get(
                 "https://api.openverse.engineering/v1/images/",
                 params={"q": query, "page_size": 5},
@@ -21,15 +20,20 @@ class OpenverseProvider(AssetProvider):
                 data = resp.json()
                 for p in data.get("results", []):
                     results.append(AssetMetadata(
-                        id=str(p["id"]),
                         provider=self.name,
-                        url=p.get("url"),
-                        author=p.get("creator", "Unknown"),
-                        license=p.get("license", "CC"),
+                        provider_asset_id=str(p["id"]),
+                        asset_key=f"{self.name}:{p['id']}",
+                        media_url=p.get("url"),
+                        source_page_url=p.get("foreign_landing_url"),
+                        author=p.get("creator", "unknown"),
+                        license_name=p.get("license", "unknown").upper(),
+                        license_url=p.get("license_url"),
                         media_type="image",
                         width=p.get("width", 0) or 0,
                         height=p.get("height", 0) or 0,
-                        attribution_required=True
+                        attribution_required=True,
+                        attribution_text=p.get("attribution"),
+                        query=query
                     ))
         except Exception as e:
             logger.warning(f"Openverse search failed for '{query}': {type(e).__name__}")

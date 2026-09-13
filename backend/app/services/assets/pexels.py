@@ -10,6 +10,10 @@ class PexelsProvider(AssetProvider):
         super().__init__("Pexels")
         self.api_key = settings.PEXELS_API_KEY
         self.headers = {"Authorization": self.api_key} if self.api_key else {}
+        if not self.api_key:
+            logger.info("Pexels API key not configured. Pexels will be disabled.")
+        else:
+            logger.info("Pexels API key configured.")
 
     def search(self, query: str, orientation: str = "landscape") -> List[AssetMetadata]:
         if not self.api_key:
@@ -27,22 +31,25 @@ class PexelsProvider(AssetProvider):
             if resp.status_code == 200:
                 data = resp.json()
                 for v in data.get("videos", []):
-                    # Find highest res video file
                     video_files = v.get("video_files", [])
                     if not video_files: continue
                     best_file = max(video_files, key=lambda f: f.get("width", 0) * f.get("height", 0))
                     
                     results.append(AssetMetadata(
-                        id=str(v["id"]),
                         provider=self.name,
-                        url=best_file["link"],
-                        author=v.get("user", {}).get("name", "Unknown"),
-                        license="Pexels License",
+                        provider_asset_id=str(v["id"]),
+                        asset_key=f"{self.name}:{v['id']}",
+                        media_url=best_file["link"],
+                        source_page_url=v.get("url"),
+                        author=v.get("user", {}).get("name", "unknown"),
+                        license_name="Pexels License",
+                        license_url="https://www.pexels.com/license/",
                         media_type="video",
                         width=best_file.get("width", 0),
                         height=best_file.get("height", 0),
                         duration=v.get("duration", 0.0),
-                        attribution_required=False
+                        attribution_required=False,
+                        query=query
                     ))
             
             # 2. Search Images (Fallback)
@@ -56,15 +63,19 @@ class PexelsProvider(AssetProvider):
                 data = resp.json()
                 for p in data.get("photos", []):
                     results.append(AssetMetadata(
-                        id=str(p["id"]),
                         provider=self.name,
-                        url=p["src"].get("large2x", p["src"].get("original")),
-                        author=p.get("photographer", "Unknown"),
-                        license="Pexels License",
+                        provider_asset_id=str(p["id"]),
+                        asset_key=f"{self.name}:{p['id']}",
+                        media_url=p["src"].get("large2x", p["src"].get("original")),
+                        source_page_url=p.get("url"),
+                        author=p.get("photographer", "unknown"),
+                        license_name="Pexels License",
+                        license_url="https://www.pexels.com/license/",
                         media_type="image",
                         width=p.get("width", 0),
                         height=p.get("height", 0),
-                        attribution_required=False
+                        attribution_required=False,
+                        query=query
                     ))
         except Exception as e:
             logger.warning(f"Pexels search failed for '{query}': {type(e).__name__}")

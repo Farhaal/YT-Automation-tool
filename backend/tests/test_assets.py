@@ -1,27 +1,56 @@
+import os
+import tempfile
 import pytest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from backend.app.services.assets.manager import AssetManager
-from backend.app.services.assets import AssetMetadata
 
 @pytest.fixture
 def mock_httpx():
     with patch("httpx.get") as mock_get, patch("httpx.stream") as mock_stream:
         yield mock_get, mock_stream
 
-def test_asset_manager_selection(mock_httpx):
+def test_asset_manager_comprehensive(mock_httpx):
     mock_get, mock_stream = mock_httpx
     
-    # Mock search responses
+    # Track stream errors to simulate download failure
+    def stream_side_effect(method, url, **kwargs):
+        if "fail_download" in url:
+            raise Exception("Network Error")
+        
+        mock_ctx = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.iter_bytes.return_value = [b"mockdata"]
+        mock_ctx.__enter__.return_value = mock_resp
+        return mock_ctx
+
+    mock_stream.side_effect = stream_side_effect
+    
     def get_side_effect(url, **kwargs):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
+        
+        # We simulate a search query for "ocean"
+        query = kwargs.get("params", {}).get("query", kwargs.get("params", {}).get("q", ""))
+        
+        if query == "no_results":
+            if "pexels" in url: mock_resp.json.return_value = {"videos": [], "photos": []}
+            elif "pixabay" in url: mock_resp.json.return_value = {"hits": []}
+            elif "openverse" in url: mock_resp.json.return_value = {"results": []}
+            elif "wikimedia" in url: mock_resp.json.return_value = {"query": {"pages": {}}}
+            return mock_resp
+        
+        if "network_fail" in query:
+            raise Exception("Connection Timeout")
+
         if "pexels.com/videos/search" in url:
             mock_resp.json.return_value = {
                 "videos": [
                     {
-                        "id": "111", 
-                        "user": {"name": "Pexels User"}, 
-                        "duration": 10.0,
+                        "id": "123", 
+                        "user": {"name": "Pexels User"},
+                        "url": "https://pexels.com/123",
                         "video_files": [{"link": "http://vid1.mp4", "width": 1920, "height": 1080}]
                     }
                 ]
@@ -29,13 +58,20 @@ def test_asset_manager_selection(mock_httpx):
         elif "pexels.com/v1/search" in url:
             mock_resp.json.return_value = {"photos": []}
         elif "pixabay.com/api/videos" in url:
+            # Deliberately use the same raw ID "123" to prove composite key deduplication works
             mock_resp.json.return_value = {
                 "hits": [
                     {
-                        "id": "222",
+                        "id": "123",
                         "user": "Pixabay User",
-                        "duration": 5.0,
-                        "videos": {"large": {"url": "http://vid2.mp4", "width": 1280, "height": 720}}
+                        "pageURL": "https://pixabay.com/123",
+                        "videos": {"large": {"url": "http://fail_download.mp4", "width": 1280, "height": 720}}
+                    },
+                    {
+                        "id": "456",
+                        "user": "Pixabay User 2",
+                        "pageURL": "https://pixabay.com/456",
+                        "videos": {"large": {"url": "http://vid3.mp4", "width": 1280, "height": 720}}
                     }
                 ]
             }
@@ -47,64 +83,96 @@ def test_asset_manager_selection(mock_httpx):
             mock_resp.json.return_value = {"query": {"pages": {}}}
         else:
             mock_resp.status_code = 404
+            
         return mock_resp
         
     mock_get.side_effect = get_side_effect
     
-    # Mock stream response for downloads
-    mock_stream_ctx = MagicMock()
-    mock_stream_resp = MagicMock()
-    mock_stream_resp.raise_for_status = MagicMock()
-    mock_stream_resp.iter_bytes.return_value = [b"mockdata"]
-    mock_stream_ctx.__enter__.return_value = mock_stream_resp
-    mock_stream.return_value = mock_stream_ctx
-
-    # Fake scenes with fixed audio-timed data from P4
     scenes = [
         {
             "start": 0.0,
             "end": 4.5,
-            "text": "The ocean covers most of our planet.",
-            "queries": ["ocean", "planet"]
+            "text": "The ocean.",
+            "queries": ["ocean"]
+        },
+        {
+            "start": 4.5,
+            "end": 6.0,
+            "text": "Nothing found here.",
+            "queries": ["no_results"]
+        },
+        {
+            "start": 6.0,
+            "end": 8.0,
+            "text": "Network crash.",
+            "queries": ["network_fail"]
         }
     ]
     
-    # Need to patch os.path.exists so it doesn't think it's cached from previous runs
-    with patch("os.path.exists", return_value=False), patch("builtins.open", MagicMock()):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        
+        # We test with keys present to test logic
         with patch("backend.app.services.assets.pexels.settings.PEXELS_API_KEY", "fake_key"):
             with patch("backend.app.services.assets.pixabay.settings.PIXABAY_API_KEY", "fake_key"):
-                manager = AssetManager()
+                manager = AssetManager(cache_dir=temp_path)
                 result_scenes = manager.select_assets_for_scenes(scenes)
+                
+        # SCENE 1 (Normal hit)
+        s1 = result_scenes[0]
+        assert s1["start"] == 0.0, "Start time mutated"
+        assert s1["end"] == 4.5, "End time mutated"
+        best = s1.get("asset")
+        assert best is not None
+        assert best["asset_key"] == "Pexels:123"
+        assert best["provider"] == "Pexels"
+        assert best["source_page_url"] == "https://pexels.com/123"
+        assert best["author"] == "Pexels User"
+        assert best["license_name"] == "Pexels License"
+        assert best["media_type"] == "video"
+        assert Path(best["local_path"]).exists()
         
+        # Pixabay:123 download fails, so backup should be Pixabay:456
+        backup = s1.get("backup_asset")
+        assert backup is not None
+        assert backup["asset_key"] == "Pixabay:456"
         
-    assert len(result_scenes) == 1
-    scene = result_scenes[0]
-    
-    assert scene["start"] == 0.0
-    assert scene["end"] == 4.5
-    assert "asset" in scene
-    assert "backup_asset" in scene
-    
-    best = scene["asset"]
-    backup = scene["backup_asset"]
-    
-    assert best["id"] == "111"  # Pexels 1080p video wins
-    assert best["media_type"] == "video"
-    assert "local_path" in best
-    
-    assert backup["id"] == "222"  # Pixabay 720p video is backup
-    
-    print("\n--- P5 Audio-Timed Scene Asset Selection Inspection ---")
-    for s in result_scenes:
-        print(f"Scene: [{s['start']:.2f}s - {s['end']:.2f}s]")
-        print(f"  Queries: {s['queries']}")
+        # SCENE 2 (No results)
+        s2 = result_scenes[1]
+        assert s2["asset"] is None
+        assert s2["backup_asset"] is None
         
-        a = s.get("asset")
-        if a:
-            print(f"  Selected: [{a['provider']}] {a['media_type'].upper()} ({a['width']}x{a['height']}) - License: {a['license']}")
-            print(f"            Path: {a['local_path']}")
-        
-        b = s.get("backup_asset")
-        if b:
-            print(f"  Backup:   [{b['provider']}] {b['media_type'].upper()} ({b['width']}x{b['height']}) - License: {b['license']}")
-    print("-------------------------------------------------------")
+        # SCENE 3 (Network fail gracefully)
+        s3 = result_scenes[2]
+        assert s3["asset"] is None
+
+        # Print Schema Inspection
+        print("\n--- P5 Schema Inspection ---")
+        for s in result_scenes:
+            print(f"Scene: [{s['start']:.2f}s - {s['end']:.2f}s] Queries: {s['queries']}")
+            if s.get("asset"):
+                a = s["asset"]
+                print(f"  Selected: {a['asset_key']} ({a['media_type']}) - {a['width']}x{a['height']}")
+                print(f"  Source: {a['source_page_url']} | Author: {a['author']}")
+                print(f"  License: {a['license_name']} ({a.get('license_url', 'None')})")
+                print(f"  Local: {a['local_path']}")
+        print("----------------------------")
+
+def test_missing_keys_fallback(mock_httpx):
+    mock_get, _ = mock_httpx
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        # Patch keys as empty
+        with patch("backend.app.services.assets.pexels.settings.PEXELS_API_KEY", ""):
+            with patch("backend.app.services.assets.pixabay.settings.PIXABAY_API_KEY", ""):
+                manager = AssetManager(cache_dir=temp_path)
+                scenes = [{"start": 0.0, "end": 1.0, "text": "test", "queries": ["test"]}]
+                manager.select_assets_for_scenes(scenes)
+                
+    # Since keys are missing, pexels/pixabay should NOT be called.
+    # Only openverse/wikimedia should be called.
+    for call in mock_get.call_args_list:
+        url = call[0][0]
+        assert "pexels" not in url
+        assert "pixabay" not in url
