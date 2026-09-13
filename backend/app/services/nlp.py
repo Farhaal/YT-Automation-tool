@@ -23,8 +23,8 @@ def _build_scene(words: List[Dict]) -> Dict:
 def segment_into_scenes(words: List[Dict[str, Any]], max_duration: float = 6.0, pause_threshold: float = 0.8) -> List[Dict[str, Any]]:
     """
     Groups words into logical scenes based on sentence boundaries and pauses.
-    Enforces max_duration strictly. Splits at the best natural boundary (comma etc.)
-    before the limit, or otherwise at the last word that fits.
+    Strictly enforces max_duration. Multi-word scenes will never exceed max_duration.
+    Single-word scenes may exceed it only if the word itself is longer than max_duration.
     """
     if not words:
         return []
@@ -35,41 +35,46 @@ def segment_into_scenes(words: List[Dict[str, Any]], max_duration: float = 6.0, 
     for word in words:
         if not current_scene:
             current_scene.append(word)
+            # A single word that is a sentence end
+            if any(word["word"].endswith(p) for p in ['.', '?', '!', '\n']):
+                scenes.append(_build_scene(current_scene))
+                current_scene = []
             continue
             
-        prev_word = current_scene[-1]
-        gap = word["start"] - prev_word["end"]
-        
-        # Hard boundaries: Sentence end or long pause
-        is_sentence_end = any(prev_word["word"].endswith(p) for p in ['.', '?', '!', '\n'])
-        is_pause = (gap >= pause_threshold)
-        
-        if is_sentence_end or is_pause:
+        # 1. Check for pause boundary *before* adding the current word
+        gap = word["start"] - current_scene[-1]["end"]
+        if gap >= pause_threshold:
             scenes.append(_build_scene(current_scene))
-            current_scene = [word]
-            continue
+            current_scene = []
             
-        # Max duration check
-        scene_start = current_scene[0]["start"]
-        if word["end"] - scene_start > max_duration:
-            # Must split. Look for the last soft boundary in current_scene.
+        current_scene.append(word)
+        
+        # 2. Enforce max_duration invariant iteratively
+        while len(current_scene) > 1 and (current_scene[-1]["end"] - current_scene[0]["start"]) > max_duration:
+            # Look for soft boundary in all but the last word
             split_idx = -1
-            for j in range(len(current_scene)-1, -1, -1):
+            for j in range(len(current_scene)-2, -1, -1):
                 if any(current_scene[j]["word"].endswith(p) for p in [',', ';', ':', '-']):
                     split_idx = j
                     break
             
-            if split_idx != -1 and split_idx < len(current_scene) - 1:
-                # Split at the last soft boundary
-                scenes.append(_build_scene(current_scene[:split_idx+1]))
-                current_scene = current_scene[split_idx+1:] + [word]
+            if split_idx != -1:
+                # Split at soft boundary
+                left = current_scene[:split_idx+1]
+                scenes.append(_build_scene(left))
+                current_scene = current_scene[split_idx+1:]
             else:
-                # No natural boundary, split strictly before the current word
-                scenes.append(_build_scene(current_scene))
-                current_scene = [word]
-        else:
-            current_scene.append(word)
+                # No soft boundary, hard split right before the last added word
+                left = current_scene[:-1]
+                scenes.append(_build_scene(left))
+                current_scene = [current_scene[-1]]
+                
+        # 3. Check for sentence end *after* max_duration enforcement
+        if current_scene and any(current_scene[-1]["word"].endswith(p) for p in ['.', '?', '!', '\n']):
+            scenes.append(_build_scene(current_scene))
+            current_scene = []
             
+    # Final flush
     if current_scene:
         scenes.append(_build_scene(current_scene))
         

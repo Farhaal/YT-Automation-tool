@@ -56,6 +56,36 @@ def test_scene_segmentation():
     
     assert input_words == output_words, "Words were duplicated or dropped!"
     
+    # 6. Final punctuation word pushing over max_duration
+    words_final_punct = [{"word": f"w{i}", "start": float(i), "end": float(i) + 0.5} for i in range(4)]
+    words_final_punct.append({"word": "w4.", "start": 4.0, "end": 4.5})
+    # Total duration is 4.5s. Let's set max_duration=4.0
+    scenes_fp = segment_into_scenes(words_final_punct, max_duration=4.0)
+    # w0 to w3 = 3.5s (valid). Adding w4. makes it 4.5s (>4.0s).
+    # Should split before w4.. Then w4. is a sentence end, so it emits.
+    assert len(scenes_fp) == 2
+    assert scenes_fp[0]["text"] == "w0 w1 w2 w3"
+    assert scenes_fp[1]["text"] == "w4."
+    
+    # 7. Early comma + long remainder
+    words_comma = [{"word": "Hi,", "start": 0.0, "end": 0.5}]
+    words_comma += [{"word": f"w{i}", "start": float(i+1), "end": float(i+1)+0.5} for i in range(5)]
+    # w0(0-0.5), w1(1-1.5), w2(2-2.5), w3(3-3.5), w4(4-4.5), w5(5-5.5)
+    # Total time 5.5s. If max_duration=4.0:
+    # Adding w4 makes end=4.5, start=0.0 -> duration 4.5 > 4.0.
+    # Soft boundary at Hi,. Splits Hi,. Remainder is w1 w2 w3 w4.
+    # Remainder duration: 4.5 - 1.0 = 3.5 <= 4.0. Loop ends.
+    # Next, add w5 (end 5.5). Remainder duration: 5.5 - 1.0 = 4.5 > 4.0.
+    # No soft boundary in remainder. Splits before w5.
+    scenes_comma = segment_into_scenes(words_comma, max_duration=4.0)
+    assert len(scenes_comma) == 3
+    assert scenes_comma[0]["text"] == "Hi,"
+    assert scenes_comma[1]["text"] == "w0 w1 w2 w3"
+    assert scenes_comma[2]["text"] == "w4"
+    
+    for s in scenes_comma:
+        assert s["end"] - s["start"] <= 4.0
+
     print("\n--- P4 Comprehensive Tests Passed ---")
 
 def test_scene_segmentation_and_keywords():
@@ -78,3 +108,13 @@ def test_scene_segmentation_and_keywords():
 
     scenes = process_script_to_scenes(mock_words)
     assert len(scenes) == 2
+    
+    scene_1 = scenes[0]
+    assert scene_1["text"] == "The ocean covers most of our planet."
+    assert 1 <= len(scene_1["queries"]) <= 3
+    assert all(len(q.strip()) > 0 for q in scene_1["queries"])
+    
+    scene_2 = scenes[1]
+    assert scene_2["text"] == "It is home to millions of species."
+    assert 1 <= len(scene_2["queries"]) <= 3
+    assert all(len(q.strip()) > 0 for q in scene_2["queries"])
