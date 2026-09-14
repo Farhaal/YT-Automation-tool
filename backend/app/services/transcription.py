@@ -1,8 +1,7 @@
-import os
-from pathlib import Path
-from typing import List, Dict, Any
-from faster_whisper import WhisperModel
+from typing import Any, Dict
+
 import ctranslate2
+from faster_whisper import WhisperModel
 
 from backend.app.core.config import settings
 from backend.app.core.logger import logger

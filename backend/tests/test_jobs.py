@@ -1,10 +1,11 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
+
+from backend.app.core.paths import DATA
 from backend.app.main import app
 from backend.app.services.job_manager import job_manager
-from backend.app.core.paths import DATA
-import json
-import uuid
 
 client = TestClient(app)
 
@@ -45,8 +46,6 @@ def test_job_orchestration(monkeypatch):
     # We want to mock run_job_pipeline_sync so it doesn't actually run heavy ML,
     # but instead we test that the script flow generates audio, then transcribes it (verifying logic).
     
-    from backend.app.api.routes import router
-    import backend.app.api.routes as routes_module
     
     called_stages = []
     
@@ -77,7 +76,7 @@ def test_job_orchestration(monkeypatch):
     monkeypatch.setattr("backend.app.services.nlp.process_script_to_scenes", mock_segment)
     monkeypatch.setattr("backend.app.services.timeline.TimelineAssembler.assemble", mock_assemble)
     monkeypatch.setattr("backend.app.services.renderer.render_timeline", mock_render)
-    monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)
+    monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)  # noqa: E501
     
     # Trigger script flow
     res = client.post("/generate/script", json={"script": "Hello world"})
@@ -98,7 +97,7 @@ def test_timeline_immutability(monkeypatch, tmp_path):
     from backend.app.services.job_manager import job_manager
     job_manager.create_job(job_id)
     
-    import json, copy
+    import copy
     timeline = {
         "version": 1,
         "resolution": {"width": 1080, "height": 1920, "fps": 30},
@@ -117,7 +116,7 @@ def test_timeline_immutability(monkeypatch, tmp_path):
     
     # Try adding a scene
     bad_timeline = copy.deepcopy(timeline)
-    bad_timeline["scenes"] = [{"id": "s1", "start": 0, "end": 5, "text": "s1"}, {"id": "s2", "start": 5, "end": 10, "text": "s2"}]
+    bad_timeline["scenes"] = [{"id": "s1", "start": 0, "end": 5, "text": "s1"}, {"id": "s2", "start": 5, "end": 10, "text": "s2"}]  # noqa: E501
     res = client.put(f"/jobs/{job_id}/timeline", json=bad_timeline)
     assert res.status_code == 400
     assert "Scene count mismatch" in res.json()["detail"]
@@ -142,7 +141,6 @@ def test_timeline_immutability(monkeypatch, tmp_path):
         assert saved["scenes"][0]["start"] == 0 
 
 def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
-    import json
     from backend.app.core.config import settings
     
     # Isolate settings path explicitly
@@ -176,7 +174,7 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
         monkeypatch.setattr("backend.app.services.nlp.process_script_to_scenes", mock_segment)
         monkeypatch.setattr("backend.app.services.timeline.TimelineAssembler.assemble", mock_assemble)
         monkeypatch.setattr("backend.app.services.renderer.render_timeline", mock_render)
-        monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)
+        monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)  # noqa: E501
         
         # Ensure settings is cleared out first so we know it loaded from file
         settings.LLM_API_KEY = ""

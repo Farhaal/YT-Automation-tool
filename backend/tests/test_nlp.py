@@ -1,4 +1,5 @@
-from backend.app.services.nlp import segment_into_scenes, extract_keywords, process_script_to_scenes
+from backend.app.services.nlp import process_script_to_scenes, segment_into_scenes
+
 
 def test_scene_segmentation():
     # 1. Empty input

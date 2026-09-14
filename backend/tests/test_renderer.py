@@ -1,15 +1,17 @@
-import os
 import json
-import pytest
+import os
 import subprocess
 from pathlib import Path
-from backend.app.services.renderer import render_timeline, has_nvenc
-from backend.app.core.paths import DATA
+
+import pytest
+
+from backend.app.services.renderer import render_timeline
+
 
 def create_test_media(temp_dir: Path):
-    from moviepy import ColorClip, AudioFileClip
-    from moviepy.audio.AudioClip import AudioArrayClip
     import numpy as np
+    from moviepy import ColorClip
+    from moviepy.audio.AudioClip import AudioArrayClip
 
     # Audio (2 seconds)
     audio_data = np.zeros((40000, 2))  # 2 seconds of silence
@@ -23,7 +25,7 @@ def create_test_media(temp_dir: Path):
     vclip.write_videofile(str(vid_path), fps=10, logger=None)
 
     # Image (1 second)
-    iclip = ColorClip(size=(320, 240), color=(0, 255, 0)).with_duration(1.0)
+    _ = ColorClip(size=(320, 240), color=(0, 255, 0)).with_duration(1.0)
     img_path = temp_dir / "test_img.png"
     from PIL import Image
     im = Image.new("RGB", (320, 240), "green")
@@ -66,7 +68,7 @@ def test_renderer_pipeline(tmp_path):
                 "asset": {
                     "type": "video",
                     "path": media["video"],
-                    "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:1", "provider_asset_id": "1"
+                    "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:1", "provider_asset_id": "1"  # noqa: E501
                 },
                 "transition_out": {"type": "crossfade", "duration": 0.2}
             },
@@ -78,7 +80,7 @@ def test_renderer_pipeline(tmp_path):
                 "asset": {
                     "type": "image",
                     "path": media["image"],
-                    "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:2", "provider_asset_id": "2"
+                    "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:2", "provider_asset_id": "2"  # noqa: E501
                 }
             },
             {
@@ -159,8 +161,9 @@ def test_fallback_encoder_when_nvenc_false(tmp_path, monkeypatch):
         pass
 
 def test_nvenc_retry_success(tmp_path, monkeypatch):
-    import backend.app.services.renderer as r
     import moviepy.video.VideoClip as vc
+
+    import backend.app.services.renderer as r
     
     monkeypatch.setattr(r, "has_nvenc", lambda: True)
     
@@ -229,6 +232,7 @@ def test_broken_asset_fallback_and_timeline_immutable(tmp_path):
 def test_motion_and_popups_renderer(tmp_path):
     media = create_test_media(tmp_path)
     import json
+
     from backend.app.services.renderer import render_timeline
     
     timeline = {
@@ -238,19 +242,19 @@ def test_motion_and_popups_renderer(tmp_path):
         "scenes": [
             {
                 "id": "s1", "start": 0.0, "end": 1.0, "text": "Scene 1",
-                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:1", "provider_asset_id": "1"},
+                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:1", "provider_asset_id": "1"},  # noqa: E501
                 "motion": "kenburns_in"
             },
             {
                 "id": "s2", "start": 1.0, "end": 2.0, "text": "Scene 2",
-                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:2", "provider_asset_id": "2"},
+                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:2", "provider_asset_id": "2"},  # noqa: E501
                 "motion": "kenburns_out"
             }
         ],
         "captions": [],
         "popups": [
-            {"at": 0.0, "duration": 1.0, "type": "text", "text": "Hello text", "position": "center", "animation": "fade"},
-            {"at": 1.0, "duration": 1.0, "type": "shape", "shape": "circle", "color": "red", "size": 100, "position": "top", "animation": "slide"}
+            {"at": 0.0, "duration": 1.0, "type": "text", "text": "Hello text", "position": "center", "animation": "fade"},  # noqa: E501
+            {"at": 1.0, "duration": 1.0, "type": "shape", "shape": "circle", "color": "red", "size": 100, "position": "top", "animation": "slide"}  # noqa: E501
         ]
     }
     
@@ -261,8 +265,8 @@ def test_motion_and_popups_renderer(tmp_path):
     out_path = render_timeline(timeline_path, draft_mode=True)
     assert out_path.exists()
     
-    from moviepy import VideoFileClip
     import pytest
+    from moviepy import VideoFileClip
     try:
         clip = VideoFileClip(str(out_path))
         assert clip.duration > 1.8

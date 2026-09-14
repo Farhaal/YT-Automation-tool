@@ -1,7 +1,9 @@
+from typing import Any, Dict, List
+
+import httpx
 import spacy
 import yake
-import httpx
-from typing import List, Dict, Any
+
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 
@@ -20,7 +22,7 @@ def _build_scene(words: List[Dict]) -> Dict:
         "words": words
     }
 
-def segment_into_scenes(words: List[Dict[str, Any]], max_duration: float = 6.0, pause_threshold: float = 0.8) -> List[Dict[str, Any]]:
+def segment_into_scenes(words: List[Dict[str, Any]], max_duration: float = 6.0, pause_threshold: float = 0.8) -> List[Dict[str, Any]]:  # noqa: E501
     """
     Groups words into logical scenes based on sentence boundaries and pauses.
     Strictly enforces max_duration. Multi-word scenes will never exceed max_duration.
@@ -85,7 +87,7 @@ def extract_keywords(text: str) -> List[str]:
     Extracts 1-3 visual search queries using YAKE and spaCy.
     """
     doc = nlp(text)
-    entities = [ent.text for ent in doc.ents if ent.label_ not in ['CARDINAL', 'ORDINAL', 'DATE', 'TIME', 'PERCENT', 'MONEY', 'QUANTITY']]
+    entities = [ent.text for ent in doc.ents if ent.label_ not in ['CARDINAL', 'ORDINAL', 'DATE', 'TIME', 'PERCENT', 'MONEY', 'QUANTITY']]  # noqa: E501
     nouns = [chunk.text for chunk in doc.noun_chunks]
     
     kw_extractor = yake.KeywordExtractor(lan="en", n=2, dedupLim=0.9, top=3, features=None)
@@ -107,7 +109,7 @@ def extract_visual_queries_with_llm(text: str) -> List[str]:
     Uses an optional LLM to generate visual search queries.
     Expects an OpenAI-compatible /chat/completions endpoint.
     """
-    prompt = f"Extract 1 to 3 short visual search queries for a stock footage site that best represent this scene: '{text}'. Return ONLY comma-separated queries, nothing else."
+    prompt = f"Extract 1 to 3 short visual search queries for a stock footage site that best represent this scene: '{text}'. Return ONLY comma-separated queries, nothing else."  # noqa: E501
     
     # Determine base URL and auth
     provider = (settings.LLM_PROVIDER or "").lower()
@@ -122,7 +124,7 @@ def extract_visual_queries_with_llm(text: str) -> List[str]:
             model = settings.LLM_MODEL or "llama3-8b-8192"
         elif provider == "openrouter":
             base_url = "https://openrouter.ai/api/v1"
-        elif provider == "ollama" or settings.USE_OLLAMA:
+        elif provider == "ollama":
             base_url = f"{settings.OLLAMA_URL.rstrip('/')}/v1"
             model = settings.LLM_MODEL or "llama3"
         else:
@@ -139,7 +141,7 @@ def extract_visual_queries_with_llm(text: str) -> List[str]:
             json={
                 "model": model, 
                 "messages": [
-                    {"role": "system", "content": "You are a visual search query generator. Return only comma-separated queries."},
+                    {"role": "system", "content": "You are a visual search query generator. Return only comma-separated queries."},  # noqa: E501
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.3
@@ -161,7 +163,7 @@ def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]
     """
     scenes = segment_into_scenes(words)
     
-    use_llm = bool(settings.LLM_API_KEY) or ((settings.LLM_PROVIDER or "").lower() == "ollama") or settings.USE_OLLAMA
+    use_llm = bool(settings.LLM_API_KEY) or ((settings.LLM_PROVIDER or "").lower() == "ollama")
     
     for scene in scenes:
         if use_llm:

@@ -1,9 +1,9 @@
 import uuid
-from pathlib import Path
 
-from backend.app.core.paths import DATA
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
+from backend.app.core.paths import DATA
+
 
 def synthesize(text: str) -> str:
     """

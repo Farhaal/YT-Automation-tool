@@ -136,6 +136,8 @@ See the architecture overview in [`docs/`](docs/) for the detailed design.
 Contributions are welcome. Please open an issue to discuss substantial changes first.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, style, and commit conventions.
 
+**Local Testing**: The project uses `ruff` for linting and `pytest` for tests, which run automatically in CI. Ensure you have installed the spaCy model locally (`python -m spacy download en_core_web_sm`) and system FFmpeg before running `pytest`.
+
 ## License
 
 Released under the [MIT License](LICENSE).

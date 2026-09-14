@@ -1,9 +1,12 @@
-import httpx
 from typing import List
+
+import httpx
+
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
 from backend.app.services.assets.base import AssetProvider
+
 
 class PixabayProvider(AssetProvider):
     def __init__(self):
@@ -34,7 +37,7 @@ class PixabayProvider(AssetProvider):
                 for v in data.get("hits", []):
                     vds = v.get("videos", {})
                     best_file = vds.get("large") or vds.get("medium") or vds.get("small")
-                    if not best_file: continue
+                    if not best_file: continue  # noqa: E701
                     
                     results.append(AssetMetadata(
                         provider=self.name,
@@ -57,7 +60,7 @@ class PixabayProvider(AssetProvider):
             # 2. Search Images
             resp = httpx.get(
                 "https://pixabay.com/api/",
-                params={"key": self.api_key, "q": query, "orientation": px_orientation, "per_page": 5, "image_type": "photo"},
+                params={"key": self.api_key, "q": query, "orientation": px_orientation, "per_page": 5, "image_type": "photo"},  # noqa: E501
                 timeout=5.0
             )
             if resp.status_code == 200:

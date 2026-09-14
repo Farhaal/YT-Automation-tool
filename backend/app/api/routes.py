@@ -1,17 +1,18 @@
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-import uuid
-import shutil
 import asyncio
 import json
+import shutil
+import uuid
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 
-from backend.app.core.paths import DATA
-from backend.app.services.transcription import transcribe_audio
-from backend.app.services.job_manager import job_manager
-from backend.app.core.logger import logger
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+
 from backend.app.core.config import settings
+from backend.app.core.logger import logger
+from backend.app.core.paths import DATA
+from backend.app.services.job_manager import job_manager
+from backend.app.services.transcription import transcribe_audio
 
 router = APIRouter()
 active_connections: Dict[str, List[WebSocket]] = {}
@@ -27,7 +28,7 @@ async def notify_job_update(job_id: str, data: dict):
         for ws in dead_ws:
             active_connections[job_id].remove(ws)
 
-def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True):
+def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True):  # noqa: E501
     def sync_notify(job_id, data):
         try:
             asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
@@ -68,8 +69,8 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         
         s = load_settings()
         import os
-        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]
-        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
+        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]  # noqa: E701
+        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]  # noqa: E701
         
         asset_manager = AssetManager(cache_dir=DATA / "assets")
         scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio)
@@ -82,11 +83,11 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         audio_dur = transcription["segments"][-1]["end"] if transcription.get("segments") else 0.0
         if audio_dur == 0.0:
             import subprocess
-            res = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_path], capture_output=True, text=True)
-            try: audio_dur = float(res.stdout.strip())
-            except: audio_dur = 1.0
+            res = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio_path], capture_output=True, text=True)  # noqa: E501
+            try: audio_dur = float(res.stdout.strip())  # noqa: E701
+            except: audio_dur = 1.0  # noqa: E701, E722
 
-        timeline = assembler.assemble(audio_path, audio_dur, words, scenes, aspect_ratio=aspect_ratio, enable_motion=enable_motion)
+        timeline = assembler.assemble(audio_path, audio_dur, words, scenes, aspect_ratio=aspect_ratio, enable_motion=enable_motion)  # noqa: E501
         
         timeline_path = DATA / "jobs" / f"{job_id}_timeline.json"
         with open(timeline_path, "w", encoding="utf-8") as f:
@@ -125,9 +126,11 @@ async def generate_from_script(req: GenerateRequest, background_tasks: Backgroun
     background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion)
     return job_manager.get_job(job_id)
 
-from fastapi import Form
+from fastapi import Form  # noqa: E402
+
+
 @router.post("/generate/audio")
-async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True)):
+async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True)):  # noqa: E501
     import asyncio
     job_id = str(uuid.uuid4())
     temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
@@ -231,9 +234,9 @@ def run_render_sync(job_id: str, draft_mode: bool, loop: asyncio.AbstractEventLo
             
     job = job_manager.get_job(job_id)
     timeline_path = job.get("timeline_path")
-    if not timeline_path: return
+    if not timeline_path: return  # noqa: E701
     
-    job_manager.update_job(job_id, status="PROCESSING", stage="Rendering draft" if draft_mode else "Rendering final", progress=90)
+    job_manager.update_job(job_id, status="PROCESSING", stage="Rendering draft" if draft_mode else "Rendering final", progress=90)  # noqa: E501
     sync_notify(job_id, job_manager.get_job(job_id))
     
     try:
@@ -241,9 +244,9 @@ def run_render_sync(job_id: str, draft_mode: bool, loop: asyncio.AbstractEventLo
         out_path = render_timeline(timeline_path, draft_mode=draft_mode)
         
         if draft_mode:
-            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, draft_video_path=str(out_path))
+            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, draft_video_path=str(out_path))  # noqa: E501
         else:
-            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, final_video_path=str(out_path))
+            job_manager.update_job(job_id, status="COMPLETED", stage="Done", progress=100, final_video_path=str(out_path))  # noqa: E501
             
     except Exception as e:
         job_manager.update_job(job_id, status="ERROR", stage="Failed", error=str(e))
@@ -287,7 +290,7 @@ def load_settings():
             with open(SETTINGS_PATH, "r") as f:
                 saved = json.load(f)
                 base_settings.update(saved)
-        except:
+        except:  # noqa: E722
             pass
     return base_settings
 
@@ -317,12 +320,12 @@ def get_settings():
 @router.post("/settings")
 def update_settings(req: SettingsUpdate):
     s = load_settings()
-    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key
-    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key
-    if req.llm_provider is not None: s["llm_provider"] = req.llm_provider
-    if req.llm_api_key is not None and req.llm_api_key != "": s["llm_api_key"] = req.llm_api_key
-    if req.llm_model is not None: s["llm_model"] = req.llm_model
-    if req.llm_base_url is not None: s["llm_base_url"] = req.llm_base_url
+    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key  # noqa: E701
+    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key  # noqa: E701
+    if req.llm_provider is not None: s["llm_provider"] = req.llm_provider  # noqa: E701
+    if req.llm_api_key is not None and req.llm_api_key != "": s["llm_api_key"] = req.llm_api_key  # noqa: E701
+    if req.llm_model is not None: s["llm_model"] = req.llm_model  # noqa: E701
+    if req.llm_base_url is not None: s["llm_base_url"] = req.llm_base_url  # noqa: E701
     
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
@@ -347,7 +350,9 @@ def delete_setting(provider: str):
     apply_settings_to_env()
     return get_settings()
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse  # noqa: E402
+
+
 @router.get("/media")
 def get_media(path: str):
     p = Path(path)

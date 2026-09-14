@@ -1,6 +1,9 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from backend.app.services.timeline import TimelineAssembler
+
 
 @pytest.fixture
 def assembler():

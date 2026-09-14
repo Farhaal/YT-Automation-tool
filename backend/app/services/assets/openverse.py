@@ -1,8 +1,11 @@
-import httpx
 from typing import List
+
+import httpx
+
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
 from backend.app.services.assets.base import AssetProvider
+
 
 class OpenverseProvider(AssetProvider):
     def __init__(self):

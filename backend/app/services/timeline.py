@@ -1,12 +1,15 @@
 import json
-import jsonschema
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import jsonschema
+
 from backend.app.core.logger import logger
 
 # Assuming SHARED is accessible, we can construct the path.
 # Let's import BASE_DIR and construct it, or just use a relative path if needed.
 from backend.app.core.paths import ROOT
+
 SCHEMA_PATH = ROOT / "shared" / "timeline.schema.json"
 
 class TimelineAssembler:
@@ -32,7 +35,7 @@ class TimelineAssembler:
             "attribution_text": asset_meta.get("attribution_text")
         }
 
-    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape", enable_motion: bool = True) -> Dict[str, Any]:
+    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape", enable_motion: bool = True) -> Dict[str, Any]:  # noqa: E501
         timeline_scenes = []
         for i, scene in enumerate(scenes):
             asset_meta = scene.get("asset")
@@ -115,7 +118,7 @@ class TimelineAssembler:
                 t_dur = sc["transition_out"]["duration"]
                 s_dur = sc["end"] - sc["start"]
                 if t_dur >= s_dur:
-                    raise ValueError(f"Scene {sc['id']} transition duration ({t_dur}) must be less than scene duration ({s_dur})")
+                    raise ValueError(f"Scene {sc['id']} transition duration ({t_dur}) must be less than scene duration ({s_dur})")  # noqa: E501
 
         last_word_end = 0.0
         for i, w in enumerate(captions):
