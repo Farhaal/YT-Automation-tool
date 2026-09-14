@@ -8,6 +8,7 @@ export default function EditorView({ jobId }: { jobId: string }) {
   const [timeline, setTimeline] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportTarget, setExportTarget] = useState('resolve');
   
   const logsEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -106,7 +107,11 @@ export default function EditorView({ jobId }: { jobId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(timeline)
       });
-      const res = await fetch(`http://localhost:8000/jobs/${jobId}/export`, { method: 'POST' });
+      const res = await fetch(`http://localhost:8000/jobs/${jobId}/export`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: exportTarget })
+      });
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
@@ -259,9 +264,20 @@ export default function EditorView({ jobId }: { jobId: string }) {
             <Button onClick={renderFinal} isLoading={loading} variant="primary" className="w-full gap-2">
               <Sparkles className="w-4 h-4" /> Render Final
             </Button>
-            <Button onClick={exportProject} isLoading={exporting} variant="ghost" className="col-span-2 w-full gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-900">
-              <Download className="w-4 h-4" /> Export Project (FCPXML / Resolve)
-            </Button>
+            <div className="col-span-2 flex items-center gap-2 mt-2">
+              <select 
+                value={exportTarget}
+                onChange={e => setExportTarget(e.target.value)}
+                className="rounded-lg border border-input bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="resolve">DaVinci Resolve</option>
+                <option value="premiere">Premiere Pro</option>
+                <option value="capcut">CapCut</option>
+              </select>
+              <Button onClick={exportProject} isLoading={exporting} variant="ghost" className="flex-1 gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-900">
+                <Download className="w-4 h-4" /> Export for Editor
+              </Button>
+            </div>
           </div>
         </Card>
       </div>

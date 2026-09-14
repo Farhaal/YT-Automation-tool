@@ -1,10 +1,11 @@
 import json
 import shutil
 from pathlib import Path
+import opentimelineio as otio
+from opentimelineio.opentime import RationalTime, TimeRange
 
 from backend.app.core.logger import logger
 from backend.app.core.paths import DATA
-
 
 def format_srt_time(seconds: float) -> str:
     h = int(seconds // 3600)
@@ -12,7 +13,6 @@ def format_srt_time(seconds: float) -> str:
     s = int(seconds % 60)
     ms = int((seconds - int(seconds)) * 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
 
 def build_srt_lines(captions: list) -> str:
     grouped_lines = []
@@ -34,45 +34,71 @@ def build_srt_lines(captions: list) -> str:
         srt_content += f"{i}\n{start_time} --> {end_time}\n{text}\n\n"
     return srt_content
 
-
-def generate_fcpxml(timeline: dict, manifest: list, audio_name: str) -> str:
-    """Best effort minimal FCPXML 1.9 generation"""
-    fps = timeline.get("resolution", {}).get("fps", 30)
-    width = timeline.get("resolution", {}).get("width", 1080)
-    height = timeline.get("resolution", {}).get("height", 1920)
-    audio_dur = timeline.get("audio", {}).get("duration", 0)
+def build_otio_timeline(timeline: dict, manifest: list, audio_name: str, fps: float = 30.0) -> otio.schema.Timeline:
+    otio_tl = otio.schema.Timeline("Exported Timeline")
+    otio_tl.global_start_time = RationalTime(0, fps)
     
-    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE fcpxml>
-<fcpxml version="1.9">
-    <resources>
-        <format id="r1" width="{width}" height="{height}" frameDuration="1/{fps}s"/>
-    </resources>
-    <library>
-        <event name="OpenReel Export">
-            <project name="Generated Video">
-                <sequence format="r1" duration="{audio_dur}s" tcStart="0s" tcFormat="NDF">
-                    <spine>
-"""
-    xml += f"""                        <clip name="Narration" duration="{audio_dur}s">
-"""
-    for idx, scene in enumerate(manifest):
+    video_track = otio.schema.Track("Video", kind=otio.schema.TrackKind.Video)
+    audio_track = otio.schema.Track("Audio", kind=otio.schema.TrackKind.Audio)
+    otio_tl.tracks.append(video_track)
+    otio_tl.tracks.append(audio_track)
+    
+    current_time = 0.0
+    for scene in manifest:
+        start_sec = scene.get("start", 0)
+        end_sec = scene.get("end", 0)
+        dur_sec = end_sec - start_sec
+        
+        if start_sec > current_time:
+            gap_dur = start_sec - current_time
+            video_track.append(otio.schema.Gap(
+                source_range=TimeRange(
+                    start_time=RationalTime(0, fps),
+                    duration=RationalTime(gap_dur * fps, fps)
+                )
+            ))
+        
         if scene["file"]:
-            start = scene["start"]
-            dur = scene["end"] - scene["start"]
-            xml += f"""                            <video offset="{start}s" name="Scene {scene['index']}" duration="{dur}s" start="0s"/>
-"""  # noqa: E501
-    xml += """                        </clip>
-                    </spine>
-                </sequence>
-            </project>
-        </event>
-    </library>
-</fcpxml>"""
-    return xml
+            clip_path = f"clips/{scene['file']}"
+            clip = otio.schema.Clip(
+                name=f"Scene {scene['index']}",
+                media_reference=otio.schema.ExternalReference(
+                    target_url=clip_path,
+                    available_range=TimeRange(
+                        start_time=RationalTime(0, fps),
+                        duration=RationalTime(dur_sec * fps, fps)
+                    )
+                ),
+                source_range=TimeRange(
+                    start_time=RationalTime(0, fps),
+                    duration=RationalTime(dur_sec * fps, fps)
+                )
+            )
+            video_track.append(clip)
+        
+        current_time = end_sec
 
+    audio_dur = timeline.get("audio", {}).get("duration", 0)
+    if audio_name and audio_dur > 0:
+        audio_clip = otio.schema.Clip(
+            name="Narration",
+            media_reference=otio.schema.ExternalReference(
+                target_url=f"audio/{audio_name}",
+                available_range=TimeRange(
+                    start_time=RationalTime(0, fps),
+                    duration=RationalTime(audio_dur * fps, fps)
+                )
+            ),
+            source_range=TimeRange(
+                start_time=RationalTime(0, fps),
+                duration=RationalTime(audio_dur * fps, fps)
+            )
+        )
+        audio_track.append(audio_clip)
 
-def export_project(timeline_path: Path, job_id: str) -> Path:
+    return otio_tl
+
+def export_project(timeline_path: Path, job_id: str, target: str = "resolve") -> Path:
     exports_dir = DATA / "exports"
     job_export_dir = exports_dir / job_id
     
@@ -129,26 +155,53 @@ def export_project(timeline_path: Path, job_id: str) -> Path:
     with open(job_export_dir / "manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
         
-    readme_text = (
-        "Exported Project Instructions\n"
-        "=============================\n\n"
-        "CapCut:\n"
-        "1. Import the clips/ folder and audio/narration into your media bin.\n"
-        "2. Place them on the timeline.\n"
-        "3. Import Captions -> select captions.srt.\n\n"
-        "DaVinci Resolve / Premiere Pro:\n"
-        "1. File -> Import -> project.fcpxml.\n"
-    )
+    generated_timelines = []
+    
+    if target in ("resolve", "premiere"):
+        fps = timeline.get("resolution", {}).get("fps", 30)
+        audio_name = audio_dest.name if audio_dest else "narration.wav"
+        
+        otio_tl = build_otio_timeline(timeline, manifest, audio_name, float(fps))
+        
+        try:
+            fcpxml_path = str(job_export_dir / "project.fcpxml")
+            otio.adapters.write_to_file(otio_tl, fcpxml_path, adapter_name="fcp_xml")
+            generated_timelines.append("project.fcpxml")
+        except Exception as e:
+            logger.warning(f"OTIO FCPXML generation failed: {e}")
+            
+        try:
+            edl_path = str(job_export_dir / "timeline.edl")
+            otio.adapters.write_to_file(otio_tl, edl_path, adapter_name="cmx_3600")
+            generated_timelines.append("timeline.edl")
+        except Exception as e:
+            logger.warning(f"OTIO EDL generation failed: {e}")
+
+    # Write README
+    readme_text = "OpenReel Exported Project Instructions\n"
+    readme_text += "======================================\n\n"
+    
+    if target == "capcut":
+        readme_text += (
+            "Target: CapCut\n"
+            "CapCut does not support FCPXML/EDL import. To assemble your video:\n"
+            "1. Import the 'clips/' folder and 'audio/narration' into your media bin.\n"
+            "2. Place the audio on the timeline.\n"
+            "3. Place the clips in order (they are numbered sequentially).\n"
+            "4. Go to Text -> Local Captions -> Import 'captions.srt'.\n"
+        )
+    else:
+        readme_text += f"Target: {target.capitalize()}\n"
+        readme_text += f"Generated timeline files: {', '.join(generated_timelines) if generated_timelines else 'None'}\n\n"
+        readme_text += (
+            "To assemble your video:\n"
+            "1. Import the generated timeline file (e.g., project.fcpxml or timeline.edl).\n"
+            "   Note: You may need to 'Relink Media' if your editor requires absolute paths. Point it to the clips/ and audio/ folders in this directory.\n"
+            "2. Import 'captions.srt' onto your timeline as a subtitle track.\n"
+        )
+
     with open(job_export_dir / "README.txt", "w", encoding="utf-8") as f:
         f.write(readme_text)
-        
-    try:
-        audio_name = audio_dest.name if audio_dest else "narration.wav"
-        fcpxml_str = generate_fcpxml(timeline, manifest, audio_name)
-        with open(job_export_dir / "project.fcpxml", "w", encoding="utf-8") as f:
-            f.write(fcpxml_str)
-    except Exception as e:
-        logger.warning(f"FCPXML generation failed: {e}")
         
     zip_base = str(exports_dir / job_id)
     shutil.make_archive(zip_base, 'zip', job_export_dir)
