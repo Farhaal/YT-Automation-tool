@@ -4,7 +4,7 @@ import httpx
 
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import AssetProvider
+from backend.app.services.assets.base import USER_AGENT, AssetProvider
 
 
 class OpenverseProvider(AssetProvider):
@@ -16,6 +16,7 @@ class OpenverseProvider(AssetProvider):
         try:
             resp = httpx.get(
                 "https://api.openverse.org/v1/images/",
+                headers={"User-Agent": USER_AGENT},
                 params={"q": query, "page_size": 5},
                 timeout=5.0,
                 follow_redirects=True

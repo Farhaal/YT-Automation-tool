@@ -5,7 +5,7 @@ import httpx
 
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import AssetProvider
+from backend.app.services.assets.base import USER_AGENT, AssetProvider
 
 
 class WikimediaProvider(AssetProvider):
@@ -17,6 +17,7 @@ class WikimediaProvider(AssetProvider):
         try:
             resp = httpx.get(
                 "https://commons.wikimedia.org/w/api.php",
+                headers={"User-Agent": USER_AGENT},
                 params={
                     "action": "query",
                     "generator": "search",

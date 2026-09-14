@@ -93,4 +93,4 @@ _One line per work session or completed phase, newest at the bottom._
 - 2026-09-14: Added optional user-provided LLM API key support (OpenAI-compatible) for smarter visual query extraction with secure local storage.
 - 2026-09-14: Enhanced asset selection with relevance-aware ranking (token overlap) and optimized Wikimedia fallback strategy. Added tag parsing from Pixabay and alt-text parsing from Pexels to power ranking.
 - 2026-09-14: Standardized CI pipeline by adding Ruff (E, F, I) formatting configuration, fixing remaining lint errors, and properly provisioning the GitHub Actions test runner with FFmpeg and spaCy dependencies.
-- 2026-09-14: Fixed Openverse endpoint domain, added redirect handling to Openverse/Wikimedia, and rigorously isolated settings file path across test suites.
+- 2026-09-14: Fixed Openverse endpoint domain, added redirect handling to Openverse/Wikimedia, rigorously isolated settings file path across test suites, and added global User-Agent header to prevent 502/rejection errors on asset APIs and downloads.

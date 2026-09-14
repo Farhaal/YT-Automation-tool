@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed 502 Bad Gateway errors on asset downloads (like Flickr-hosted Openverse images) and strict provider API rejections (Wikimedia) by passing a standard browser `User-Agent` header in all requests.
 - Fixed API endpoint for Openverse provider to correctly follow redirects on `api.openverse.org`.
 - Fixed robust fallback for Wikimedia provider to also safely follow HTTP redirects.
 - Fixed test suites to strictly isolate `SETTINGS_PATH` inside `tmp_path`, guaranteeing local user data is untouched by test runs.
