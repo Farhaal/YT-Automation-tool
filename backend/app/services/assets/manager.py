@@ -11,12 +11,9 @@ from backend.app.services.assets.wikimedia import WikimediaProvider
 
 class AssetManager:
     def __init__(self, cache_dir: Optional[Path] = None):
-        self.providers = [
-            PexelsProvider(),
-            PixabayProvider(),
-            OpenverseProvider(),
-            WikimediaProvider()
-        ]
+        self.fast_tier = [PexelsProvider(), PixabayProvider()]
+        self.slow_tier = [OpenverseProvider(), WikimediaProvider()]
+        self.providers = self.fast_tier + self.slow_tier
         self.used_asset_keys = set()
         self.cache_dir = cache_dir or (DATA / "assets")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -88,57 +85,85 @@ class AssetManager:
             
         return sorted(unused, key=score, reverse=True)
 
+    def _concurrent_search(self, providers, query: str, query_idx: int, orientation: str) -> List[AssetMetadata]:
+        import concurrent.futures
+        import logging
+        
+        candidates = []
+        seen_keys = set()
+
+        def _search_provider(provider):
+            try:
+                return provider.search(query, orientation=orientation)
+            except Exception as e:
+                logging.warning(f"Provider {provider.name} search failed: {e}")
+                return []
+
+        if not providers:
+            return []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            future_to_prov = {executor.submit(_search_provider, p): p for p in providers}
+            for future in concurrent.futures.as_completed(future_to_prov):
+                res = future.result()
+                for pos_idx, a in enumerate(res):
+                    a.query = query
+                    a.query_priority = query_idx
+                    a.result_position = pos_idx
+                    if a.asset_key not in seen_keys:
+                        seen_keys.add(a.asset_key)
+                        candidates.append(a)
+        return candidates
+
+    def _rank_and_download(self, candidates, orientation, scene_duration, full_scene_query):
+        ranked = self.rank_assets(candidates, orientation, scene_duration, full_scene_query)
+        best_asset = None
+        backup_asset = None
+        
+        for asset in ranked:
+            provider = next((p for p in self.providers if p.name == asset.provider), None)
+            if not provider:
+                continue
+            
+            local_path = provider.download(asset, self.cache_dir)
+            if local_path:
+                if not best_asset:
+                    best_asset = asset
+                    self.used_asset_keys.add(asset.asset_key)
+                elif not backup_asset:
+                    backup_asset = asset
+                    break
+        return best_asset, backup_asset
+
     def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape") -> List[Dict[str, Any]]:  # noqa: E501
         for scene in scenes:
             queries = scene.get("queries", [])
             if not queries:
                 queries = [scene["text"]]
                 
+            # Cap at 2 queries max
+            queries = queries[:2]
             scene_duration = scene.get("end", 0.0) - scene.get("start", 0.0)
-            candidates = []
-            seen_keys = set()
-            
-            # Combine all queries for the scene to evaluate total relevance later
             full_scene_query = " ".join(queries)
-            
-            for query_idx, query in enumerate(queries):
-                for provider in self.providers:
-                    # Skip Wikimedia if we already have candidates from primary providers
-                    if provider.name == "Wikimedia" and len(candidates) > 0:
-                        continue
-                        
-                    res = provider.search(query, orientation=orientation)
-                    for pos_idx, a in enumerate(res):
-                        a.query = query
-                        a.query_priority = query_idx
-                        a.result_position = pos_idx
-                        
-                        # Deduplicate by global composite asset_key
-                        if a.asset_key not in seen_keys:
-                            seen_keys.add(a.asset_key)
-                            candidates.append(a)
-                            
-                    if len(candidates) > 50:
-                        break
-                if len(candidates) > 50:
-                    break
-                    
-            ranked = self.rank_assets(candidates, orientation, scene_duration, full_scene_query)
             
             best_asset = None
             backup_asset = None
             
-            for asset in ranked:
-                provider = next(p for p in self.providers if p.name == asset.provider)
-                local_path = provider.download(asset, self.cache_dir)
+            for query_idx, query in enumerate(queries):
+                # Phase 1: Fast Tier
+                candidates = self._concurrent_search(self.fast_tier, query, query_idx, orientation)
+                if candidates:
+                    best_asset, backup_asset = self._rank_and_download(candidates, orientation, scene_duration, full_scene_query)
                 
-                if local_path:
-                    if not best_asset:
-                        best_asset = asset
-                        self.used_asset_keys.add(asset.asset_key)
-                    elif not backup_asset:
-                        backup_asset = asset
-                        break
+                # Phase 2: Slow Tier (only if fast tier yielded nothing usable)
+                if not best_asset:
+                    slow_candidates = self._concurrent_search(self.slow_tier, query, query_idx, orientation)
+                    if slow_candidates:
+                        best_asset, backup_asset = self._rank_and_download(slow_candidates, orientation, scene_duration, full_scene_query)
+                
+                # Early exit if we found a good asset
+                if best_asset:
+                    break
                         
             scene["asset"] = best_asset.model_dump() if best_asset else None
             scene["backup_asset"] = backup_asset.model_dump() if backup_asset else None
