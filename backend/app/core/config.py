@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     UNSPLASH_ACCESS_KEY: Optional[str] = None
 
     # Runtime configuration
-    WHISPER_MODEL: str = "large-v3"
+    # Users can set WHISPER_MODEL=medium or large-v3 in .env for higher accuracy at the cost of speed.
+    WHISPER_MODEL: str = "small"
     DEVICE: str = "auto"
     TTS_ENGINE: str = "pyttsx3"
     OLLAMA_URL: str = "http://localhost:11434"

@@ -160,12 +160,18 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
         
         logger.info(f"Rendering {out_path.name} with codec {codec} at {W}x{H} {fps}fps")
         
+        if codec == "h264_nvenc":
+            ffmpeg_params = ["-preset", "p4", "-tune", "hq"]
+        else:
+            ffmpeg_params = ["-preset", "veryfast"]
+
         final_video.write_videofile(
             str(out_path),
             fps=fps,
             codec=codec,
             audio_codec="aac",
             threads=4,
+            ffmpeg_params=ffmpeg_params,
             logger=None 
         )
     finally:

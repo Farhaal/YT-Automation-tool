@@ -112,6 +112,14 @@ npm run dev
 Pexels and Pixabay require free API keys. These are completely optional, user-owned keys configured locally in the app's Settings page (they are never committed or uploaded).
 Openverse and Wikimedia Commons do not require any API keys and will work out-of-the-box.
 
+## Performance & Model Size
+
+OpenReel is designed to be configurable for a balance of speed and quality:
+
+1. **Transcription (Whisper):** By default, the `WHISPER_MODEL` is set to `small` in `.env.example` to provide fast, reasonably accurate transcription. If you need higher accuracy, you can change this to `medium` or `large-v3` in your `.env` file (at the cost of speed).
+2. **Ken Burns Motion:** Ken Burns motion scales and resizes images per frame, which can significantly slow down rendering. You can easily toggle this off in the UI before generating for noticeably faster preview renders.
+3. **GPU Encoding:** The backend automatically tries to use FFmpeg with NVIDIA NVENC (`h264_nvenc`) for blazing-fast encoding. If NVENC is not available or fails, it gracefully falls back to CPU encoding (`libx264`).
+
 ## Roadmap
 
 - [ ] P9: Full-resolution export and auto-generated credits file

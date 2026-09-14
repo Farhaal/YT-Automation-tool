@@ -32,7 +32,7 @@ class TimelineAssembler:
             "attribution_text": asset_meta.get("attribution_text")
         }
 
-    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape") -> Dict[str, Any]:
+    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape", enable_motion: bool = True) -> Dict[str, Any]:
         timeline_scenes = []
         for i, scene in enumerate(scenes):
             asset_meta = scene.get("asset")
@@ -54,7 +54,7 @@ class TimelineAssembler:
                 "text": scene["text"],
                 "asset": timeline_asset,
                 "backup_asset": timeline_backup,
-                "motion": "kenburns_in",
+                "motion": "kenburns_in" if enable_motion else "none",
             }
             if transition:
                 timeline_scene["transition_out"] = transition

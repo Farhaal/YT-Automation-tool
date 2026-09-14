@@ -4,6 +4,7 @@ import { Upload, FileText, Loader, MonitorPlay } from 'lucide-react';
 export default function CreatorView({ onJobCreated }: { onJobCreated: (id: string) => void }) {
   const [script, setScript] = useState('');
   const [aspectRatio, setAspectRatio] = useState('landscape');
+  const [enableMotion, setEnableMotion] = useState(true);
   const [loading, setLoading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -12,7 +13,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
     const res = await fetch('http://localhost:8000/generate/script', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script, aspect_ratio: aspectRatio })
+      body: JSON.stringify({ script, aspect_ratio: aspectRatio, enable_motion: enableMotion })
     });
     const data = await res.json();
     setLoading(false);
@@ -26,6 +27,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
     const fd = new FormData();
     fd.append('audio_file', file);
     fd.append('aspect_ratio', aspectRatio);
+    fd.append('enable_motion', String(enableMotion));
     const res = await fetch('http://localhost:8000/generate/audio', {
       method: 'POST',
       body: fd
@@ -37,20 +39,31 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded shadow flex items-center justify-between border-l-4 border-indigo-500">
+      <div className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:items-center justify-between border-l-4 border-indigo-500 gap-4">
         <div className="flex items-center gap-3">
           <MonitorPlay className="w-6 h-6 text-indigo-500" />
-          <h2 className="text-lg font-bold">Video Format</h2>
+          <h2 className="text-lg font-bold">Video Format & Quality</h2>
         </div>
-        <select 
-          value={aspectRatio}
-          onChange={e => setAspectRatio(e.target.value)}
-          className="border border-gray-300 rounded px-4 py-2 font-medium bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="landscape">16:9 YouTube (Landscape)</option>
-          <option value="portrait">9:16 Shorts (Portrait)</option>
-          <option value="square">1:1 Square</option>
-        </select>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={enableMotion} 
+              onChange={e => setEnableMotion(e.target.checked)}
+              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+            />
+            Enable Ken Burns motion (slower)
+          </label>
+          <select 
+            value={aspectRatio}
+            onChange={e => setAspectRatio(e.target.value)}
+            className="border border-gray-300 rounded px-4 py-2 font-medium bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="landscape">16:9 YouTube (Landscape)</option>
+            <option value="portrait">9:16 Shorts (Portrait)</option>
+            <option value="square">1:1 Square</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-8">

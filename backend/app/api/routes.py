@@ -27,7 +27,7 @@ async def notify_job_update(job_id: str, data: dict):
         for ws in dead_ws:
             active_connections[job_id].remove(ws)
 
-def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape"):
+def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True):
     def sync_notify(job_id, data):
         try:
             asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
@@ -83,7 +83,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
             try: audio_dur = float(res.stdout.strip())
             except: audio_dur = 1.0
 
-        timeline = assembler.assemble(audio_path, audio_dur, words, scenes, aspect_ratio=aspect_ratio)
+        timeline = assembler.assemble(audio_path, audio_dur, words, scenes, aspect_ratio=aspect_ratio, enable_motion=enable_motion)
         
         timeline_path = DATA / "jobs" / f"{job_id}_timeline.json"
         with open(timeline_path, "w", encoding="utf-8") as f:
@@ -105,6 +105,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
 class GenerateRequest(BaseModel):
     script: str = ""
     aspect_ratio: str = "landscape"
+    enable_motion: bool = True
 
 @router.get("/health")
 def health_check():
@@ -118,12 +119,12 @@ async def generate_from_script(req: GenerateRequest, background_tasks: Backgroun
     job_id = str(uuid.uuid4())
     job_manager.create_job(job_id, script=req.script)
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion)
     return job_manager.get_job(job_id)
 
 from fastapi import Form
 @router.post("/generate/audio")
-async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape")):
+async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True)):
     import asyncio
     job_id = str(uuid.uuid4())
     temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
@@ -133,7 +134,7 @@ async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: Upl
         
     job_manager.create_job(job_id, audio_path=str(temp_path))
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio, enable_motion)
     return job_manager.get_job(job_id)
 
 @router.get("/jobs/{job_id}")

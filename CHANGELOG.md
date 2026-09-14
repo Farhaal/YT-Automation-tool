@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for selecting video aspect ratio (16:9 Landscape, 9:16 Portrait, 1:1 Square) in the frontend.
+- Added UI toggle to disable Ken Burns motion for faster video generation.
+- Optimized default FFmpeg encoder presets (`-preset p4` for NVENC, `-preset veryfast` for libx264).
+- `WHISPER_MODEL` defaults to `small` for much faster transcription (configurable back to `large-v3` for accuracy).
 - Backend timeline assembler now correctly defaults to 16:9 Landscape if not specified.
 - Initial project scaffolding, documentation, and development tooling.
 
