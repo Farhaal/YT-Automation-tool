@@ -78,6 +78,28 @@ export default function EditorView({ jobId }: { jobId: string }) {
     setLoading(false);
   };
 
+  const [exporting, setExporting] = React.useState(false);
+
+  const exportProject = async () => {
+    setExporting(true);
+    try {
+      await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(timeline)
+      });
+      const resp = await fetch(`http://localhost:8000/jobs/${jobId}/export`, {
+        method: 'POST'
+      });
+      const data = await resp.json();
+      if (data.export_path) {
+        window.open(`http://localhost:8000/media?path=${encodeURIComponent(data.export_path)}`, '_blank');
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const swapBackup = (sceneIndex: number) => {
     const t = { ...timeline };
     const s = t.scenes[sceneIndex];
@@ -146,6 +168,10 @@ export default function EditorView({ jobId }: { jobId: string }) {
             <button onClick={renderFinal} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 flex items-center gap-2">
               {loading ? <Loader className="w-4 h-4 animate-spin" /> : null}
               Render Final (1080p)
+            </button>
+            <button onClick={exportProject} disabled={exporting} className="bg-purple-600 text-white px-4 py-2 rounded font-medium hover:bg-purple-700 flex items-center gap-2">
+              {exporting ? <Loader className="w-4 h-4 animate-spin" /> : null}
+              Export for Editor
             </button>
           </div>
         </div>
