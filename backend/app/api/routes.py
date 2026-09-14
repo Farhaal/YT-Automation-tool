@@ -385,5 +385,5 @@ def get_media(path: str):
             raise HTTPException(status_code=403, detail="Forbidden")
     except ValueError:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return FileResponse(p)
+    return FileResponse(p, filename=p.name)
 

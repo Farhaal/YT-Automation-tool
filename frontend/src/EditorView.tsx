@@ -112,19 +112,15 @@ export default function EditorView({ jobId }: { jobId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target: exportTarget })
       });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `openreel_project_${jobId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        toast("Export downloaded!", "success");
-      } else {
-        throw new Error("Export failed");
-      }
+      if (!res.ok) throw new Error("Export failed");
+      const data = await res.json();
+      const a = document.createElement('a');
+      a.href = `http://localhost:8000/media?path=${encodeURIComponent(data.export_path)}`;
+      a.download = `openreel_project_${jobId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast("Export ready — downloading...", "success");
     } catch (e) {
       console.error(e);
       toast("Error exporting project bundle", "error");
