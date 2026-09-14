@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added "Export for Editor" feature to download an editable project zip (containing raw numbered clips, audio, properly formatted SRT subtitles, and an FCPXML project file) for native import into CapCut, DaVinci Resolve, and Premiere Pro.
 - Added full 1080p final render functionality, exposed via the Editor UI, allowing users to switch between fast preview drafts and high-quality final outputs.
+- Vastly accelerated asset search speeds by capping queries per scene (max 2), processing fast-tier providers (Pexels, Pixabay) first and skipping slow-tier providers upon success, and issuing searches concurrently.
 - Added intelligent subtitle grouping (line-level captions) which chunks words into natural, readable phrases synced to the audio, significantly improving visual quality.
 - Added gap-free visual layout rendering so that background clips remain contiguous and eliminate flashing black frames during audio pauses.
 - Added two-stage topic-aware LLM query generation. When an LLM key is configured, the system first summarizes the global video context and injects it into per-scene queries, producing highly accurate, globally consistent search terms.
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed API endpoint for Openverse provider to correctly follow redirects on `api.openverse.org`, and increased search timeout to 20.0s for improved reliability.
 - Fixed robust fallback for Wikimedia provider to also safely follow HTTP redirects.
 - Fixed test suites to strictly isolate `SETTINGS_PATH` inside `tmp_path`, guaranteeing local user data is untouched by test runs.
+- Fixed visual clipping of caption descenders (e.g., 'g', 'p', 'y') by raising subtitle placement into the 85% height title-safe zone and robustly clamping vertical coordinates.
 - Fixed crash in scene segmentation for users without an LLM key (removed stale `settings.USE_OLLAMA` reference that no longer exists in config).
 - Fixed timing issue where LLM API keys saved in settings were not applied before scene segmentation, causing NLP to fall back to YAKE on a fresh backend process.
 - Fixed GitHub Actions CI by correctly provisioning FFmpeg and spaCy models in the test runner.

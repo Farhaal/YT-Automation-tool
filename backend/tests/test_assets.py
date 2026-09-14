@@ -209,12 +209,10 @@ def test_asset_manager_comprehensive(mock_httpx):
         pixabay_hash = hashlib.md5("Pixabay:primary_vid".encode()).hexdigest()
         assert not (temp_path / f"{pixabay_hash}.mp4").exists(), "Partial download file was not cleaned up!"
         
-        # So backup becomes Openverse:ov_img (Query 0, score 1000) which beats Pexels:secondary_vid (Query 1, score 995).  # noqa: E501
-        # This explicitly proves the "relevance-first" ranking policy!
+        # Due to the fast-tier early exit, we stop searching once Pexels:primary_vid is found.
+        # Thus, the slow tier is skipped, and no valid backup remains for this scene.
         backup = s1.get("backup_asset")
-        assert backup is not None
-        assert backup["asset_key"] == "Openverse:ov_img"
-        assert backup["query"] == "primary"
+        assert backup is None
         
         # Ensure httpx.stream was NOT called for secondary_vid because we pre-cached it
         called_urls = [call[0][1] for call in mock_stream.call_args_list]
@@ -222,12 +220,17 @@ def test_asset_manager_comprehensive(mock_httpx):
         
         # Metadata field completeness assertions
         for meta in [best, backup]:
+            if not meta:
+                continue
             assert "provider_asset_id" in meta
             assert "asset_key" in meta
             assert "media_url" in meta
+            assert "media_type" in meta
+            assert meta["media_type"] in ["video", "image"]
             assert "source_page_url" in meta
             assert "author" in meta
             assert "license_name" in meta
+            assert "attribution_text" in meta
             assert "attribution_required" in meta
             assert "query" in meta
             assert "cache_key" in meta
@@ -447,4 +450,78 @@ def test_pixabay_tags_relevance_ranking(tmp_path):
     # The one with overlap MUST rank first!
     assert ranked[0].asset_key == "Pixabay:2"
     assert ranked[1].asset_key == "Pixabay:1"
+
+
+def test_concurrent_fast_tier_early_exit(tmp_path, monkeypatch):
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.manager import AssetManager
+    
+    manager = AssetManager(cache_dir=tmp_path)
+    
+    # Track calls
+    calls = {"fast": 0, "slow": 0}
+    
+    # Mock providers
+    class MockFast:
+        name = "MockFast"
+        def search(self, q, orientation):
+            calls["fast"] += 1
+            return [AssetMetadata(provider="MockFast", provider_asset_id="1", asset_key="F:1", media_url="http://x", media_type="image", width=100, height=100, query=q, query_priority=0, result_position=0)]
+        def download(self, a, d): return "mock_path"
+
+    class MockSlow:
+        name = "MockSlow"
+        def search(self, q, orientation):
+            calls["slow"] += 1
+            return []
+        def download(self, a, d): return None
+
+    manager.fast_tier = [MockFast()]
+    manager.slow_tier = [MockSlow()]
+    manager.providers = manager.fast_tier + manager.slow_tier
+    
+    scenes = [{"start": 0.0, "end": 1.0, "text": "hello", "queries": ["hello", "world"]}]
+    res = manager.select_assets_for_scenes(scenes)
+    
+    assert res[0]["asset"]["provider"] == "MockFast"
+    assert calls["fast"] == 1  # Only 1 fast provider was called (for query 1)
+    assert calls["slow"] == 0  # Should NOT be called because fast tier returned an asset
+    # Only 1 query used because early exit worked on the first query!
+    
+def test_slow_tier_fallback(tmp_path, monkeypatch):
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.manager import AssetManager
+    
+    manager = AssetManager(cache_dir=tmp_path)
+    calls = {"fast": 0, "slow": 0}
+    
+    class MockFastEmpty:
+        name = "MockFastEmpty"
+        def search(self, q, orientation):
+            calls["fast"] += 1
+            return []
+        def download(self, a, d): return None
+        
+    class MockSlowFound:
+        name = "MockSlowFound"
+        def search(self, q, orientation):
+            calls["slow"] += 1
+            if q == "world": # Second query finds it
+                return [AssetMetadata(provider="MockSlowFound", provider_asset_id="1", asset_key="S:1", media_url="http://x", media_type="image", width=100, height=100, query=q, query_priority=0, result_position=0)]
+            return []
+        def download(self, a, d): return "mock_path"
+        
+    manager.fast_tier = [MockFastEmpty()]
+    manager.slow_tier = [MockSlowFound()]
+    manager.providers = manager.fast_tier + manager.slow_tier
+    
+    scenes = [{"start": 0.0, "end": 1.0, "text": "hello", "queries": ["hello", "world"]}]
+    res = manager.select_assets_for_scenes(scenes)
+    
+    assert res[0]["asset"]["provider"] == "MockSlowFound"
+    assert res[0]["asset"]["query"] == "world"
+    # Query 1: Fast(0), Slow(0 returns) -> Next query
+    # Query 2: Fast(0), Slow(1 returns) -> Done
+    assert calls["fast"] == 2
+    assert calls["slow"] == 2
 

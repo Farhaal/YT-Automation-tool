@@ -120,9 +120,10 @@ For smarter visual search query extraction, you can optionally provide an LLM AP
 
 OpenReel is designed to be configurable for a balance of speed and quality:
 
-1. **Transcription (Whisper):** By default, the `WHISPER_MODEL` is set to `small` in `.env.example` to provide fast, reasonably accurate transcription. If you need higher accuracy, you can change this to `medium` or `large-v3` in your `.env` file (at the cost of speed).
-2. **Ken Burns Motion:** Ken Burns motion scales and resizes images per frame, which can significantly slow down rendering. You can easily toggle this off in the UI before generating for noticeably faster preview renders.
-3. **GPU Encoding:** The backend automatically tries to use FFmpeg with NVIDIA NVENC (`h264_nvenc`) for blazing-fast encoding. If NVENC is not available or fails, it gracefully falls back to CPU encoding (`libx264`).
+1. **Concurrent Media Searching:** Asset sourcing runs concurrently across providers. High-quality indexed platforms (Pexels, Pixabay) are placed in a 'Fast Tier' and searched first, instantly skipping the slower fallback APIs (Openverse, Wikimedia) once a valid clip is found, guaranteeing searches wrap up in seconds.
+2. **Transcription (Whisper):** By default, the `WHISPER_MODEL` is set to `small` in `.env.example` to provide fast, reasonably accurate transcription. If you need higher accuracy, you can change this to `medium` or `large-v3` in your `.env` file (at the cost of speed).
+3. **Ken Burns Motion:** Ken Burns motion scales and resizes images per frame, which can significantly slow down rendering. You can easily toggle this off in the UI before generating for noticeably faster preview renders.
+4. **GPU Encoding:** The backend automatically tries to use FFmpeg with NVIDIA NVENC (`h264_nvenc`) for blazing-fast encoding. If NVENC is not available or fails, it gracefully falls back to CPU encoding (`libx264`).
 
 ## Roadmap
 

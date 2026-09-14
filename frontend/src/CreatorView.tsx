@@ -1,98 +1,199 @@
 import { useState, useRef } from 'react';
-import { Upload, FileText, Loader, MonitorPlay } from 'lucide-react';
+import { Upload, FileText, MonitorPlay, Sparkles, AudioLines } from 'lucide-react';
+import { Button, Card, SegmentedControl, useToast } from './ui';
 
 export default function CreatorView({ onJobCreated }: { onJobCreated: (id: string) => void }) {
   const [script, setScript] = useState('');
   const [aspectRatio, setAspectRatio] = useState('landscape');
-  const [enableMotion, setEnableMotion] = useState(true);
+  const [enableMotion, setEnableMotion] = useState('true');
   const [loading, setLoading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleScriptSubmit = async () => {
+    if (!script.trim()) return;
     setLoading(true);
-    const res = await fetch('http://localhost:8000/generate/script', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script, aspect_ratio: aspectRatio, enable_motion: enableMotion })
-    });
-    const data = await res.json();
-    setLoading(false);
-    onJobCreated(data.job_id);
+    toast("Starting script generation...", "info");
+    try {
+      const res = await fetch('http://localhost:8000/generate/script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          script, 
+          aspect_ratio: aspectRatio, 
+          enable_motion: enableMotion === 'true' 
+        })
+      });
+      if (!res.ok) throw new Error("Backend returned error");
+      const data = await res.json();
+      toast("Job created successfully!", "success");
+      onJobCreated(data.job_id);
+    } catch (err) {
+      console.error(err);
+      toast("Failed to start job from script.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleFileUpload = async (e: any) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processAudioFile = async (file: File) => {
     setLoading(true);
+    toast(`Uploading ${file.name}...`, "info");
     const fd = new FormData();
     fd.append('audio_file', file);
     fd.append('aspect_ratio', aspectRatio);
-    fd.append('enable_motion', String(enableMotion));
-    const res = await fetch('http://localhost:8000/generate/audio', {
-      method: 'POST',
-      body: fd
-    });
-    const data = await res.json();
-    setLoading(false);
-    onJobCreated(data.job_id);
+    fd.append('enable_motion', enableMotion);
+    try {
+      const res = await fetch('http://localhost:8000/generate/audio', {
+        method: 'POST',
+        body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      toast("Audio uploaded, job created!", "success");
+      onJobCreated(data.job_id);
+    } catch (err) {
+      console.error(err);
+      toast("Failed to start job from audio.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processAudioFile(e.dataTransfer.files[0]);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-4 rounded shadow flex flex-col sm:flex-row sm:items-center justify-between border-l-4 border-indigo-500 gap-4">
-        <div className="flex items-center gap-3">
-          <MonitorPlay className="w-6 h-6 text-indigo-500" />
-          <h2 className="text-lg font-bold">Video Format & Quality</h2>
-        </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={enableMotion} 
-              onChange={e => setEnableMotion(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-            />
-            Enable Ken Burns motion (slower)
-          </label>
-          <select 
-            value={aspectRatio}
-            onChange={e => setAspectRatio(e.target.value)}
-            className="border border-gray-300 rounded px-4 py-2 font-medium bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="landscape">16:9 YouTube (Landscape)</option>
-            <option value="portrait">9:16 Shorts (Portrait)</option>
-            <option value="square">1:1 Square</option>
-          </select>
-        </div>
+    <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      
+      {/* Hero */}
+      <div className="space-y-4 pt-4">
+        <h2 className="text-4xl font-extrabold tracking-tight text-foreground">Create a New Project</h2>
+        <p className="text-muted-foreground max-w-2xl text-lg">
+          Upload a voiceover or paste a script, and our engine will source visuals, sync captions, and assemble a complete timeline.
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="bg-white p-6 rounded shadow flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-gray-300">
-          <Upload className="w-12 h-12 text-blue-500 mb-4" />
-          <h2 className="text-xl font-bold mb-2">Upload Narration Audio</h2>
-          <p className="text-gray-500 text-center mb-6">Start with real audio. We'll transcribe it for perfect timing.</p>
-          <input type="file" ref={fileInput} onChange={handleFileUpload} accept="audio/*" className="hidden" />
-          <button disabled={loading} onClick={() => fileInput.current?.click()} className="bg-blue-600 text-white px-6 py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50">
-            Select Audio File
-          </button>
-        </div>
-
-        <div className="bg-white p-6 rounded shadow flex flex-col min-h-[300px]">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="text-green-500" />
-            <h2 className="text-xl font-bold">Or generate from Script</h2>
+      {/* Global Settings */}
+      <Card className="p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 p-2.5 rounded-xl">
+              <MonitorPlay className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg text-foreground">Project Settings</h3>
+              <p className="text-sm text-muted-foreground">Applies to both audio and script generation</p>
+            </div>
           </div>
-          <textarea 
-            value={script} 
-            onChange={e => setScript(e.target.value)} 
-            placeholder="Paste your script here... We will generate TTS audio first, then transcribe it for timing."
-            className="flex-1 border rounded p-3 mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
-          <button disabled={loading || !script.trim()} onClick={handleScriptSubmit} className="bg-green-600 text-white px-6 py-2 rounded font-medium hover:bg-green-700 disabled:opacity-50 self-end flex items-center gap-2">
-            {loading ? <Loader className="animate-spin w-4 h-4" /> : null}
-            Generate
-          </button>
+          
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Format</label>
+              <SegmentedControl 
+                value={aspectRatio}
+                onChange={setAspectRatio}
+                options={[
+                  { label: '16:9 (YouTube)', value: 'landscape' },
+                  { label: '9:16 (Shorts)', value: 'portrait' },
+                  { label: '1:1 (Square)', value: 'square' }
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ken Burns</label>
+              <SegmentedControl 
+                value={enableMotion}
+                onChange={setEnableMotion}
+                options={[
+                  { label: 'Enabled', value: 'true' },
+                  { label: 'Disabled', value: 'false' }
+                ]}
+              />
+            </div>
+          </div>
         </div>
+      </Card>
+
+      {/* Inputs */}
+      <div className="grid md:grid-cols-2 gap-6">
+        
+        {/* Dropzone */}
+        <Card className={`relative overflow-hidden transition-all duration-300 flex flex-col min-h-[400px] ${dragActive ? 'ring-2 ring-primary border-primary' : 'hover:border-primary/50'}`}>
+          <div className="p-6 border-b bg-muted/30">
+            <div className="flex items-center gap-3">
+              <AudioLines className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-lg text-foreground">From Audio</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Upload a voiceover (MP3/WAV)</p>
+          </div>
+          
+          <div 
+            className={`flex-1 flex flex-col items-center justify-center p-8 text-center transition-colors ${dragActive ? 'bg-primary/5' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={handleDrop}
+          >
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
+              <Upload className="w-8 h-8" />
+            </div>
+            <h4 className="text-lg font-semibold mb-2 text-foreground">Drag & Drop Audio</h4>
+            <p className="text-sm text-muted-foreground mb-8 max-w-[250px]">
+              We'll transcribe the audio for perfect word-level timing.
+            </p>
+            <input 
+              type="file" 
+              ref={fileInput} 
+              onChange={(e) => e.target.files?.[0] && processAudioFile(e.target.files[0])} 
+              accept="audio/*" 
+              className="hidden" 
+            />
+            <Button 
+              onClick={() => fileInput.current?.click()} 
+              isLoading={loading}
+              size="lg"
+            >
+              Browse Files
+            </Button>
+          </div>
+        </Card>
+
+        {/* Script */}
+        <Card className="flex flex-col min-h-[400px] hover:border-primary/50 transition-colors">
+          <div className="p-6 border-b bg-muted/30">
+            <div className="flex items-center gap-3">
+              <FileText className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-lg text-foreground">From Script</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Paste text for AI Voiceover</p>
+          </div>
+          
+          <div className="p-6 flex-1 flex flex-col gap-4">
+            <textarea 
+              value={script} 
+              onChange={e => setScript(e.target.value)} 
+              placeholder="Start writing your script here... Our TTS engine will synthesize a natural voiceover."
+              className="flex-1 w-full rounded-xl border border-input bg-background px-4 py-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none transition-shadow"
+            />
+            <Button 
+              onClick={handleScriptSubmit} 
+              disabled={!script.trim()}
+              isLoading={loading}
+              size="lg"
+              className="w-full flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Generate Video
+            </Button>
+          </div>
+        </Card>
+
       </div>
     </div>
   );

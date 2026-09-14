@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Loader, RefreshCw, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, RefreshCw, AlertTriangle, ArrowLeftRight, Download, MonitorPlay, Type, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Button, Card, Badge, useToast, Input } from './ui';
+import ProcessingView from './ProcessingView';
 
 export default function EditorView({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<any>(null);
   const [timeline, setTimeline] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetch(`http://localhost:8000/jobs/${jobId}`).then(r => r.json()).then(setJob);
@@ -13,18 +19,15 @@ export default function EditorView({ jobId }: { jobId: string }) {
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
       setJob(data);
-      if (data.status === 'COMPLETED' && data.timeline_path) {
+      if (data.status === 'COMPLETED' && data.timeline_path && !timeline) {
         loadTimeline();
       }
     };
     
-    // Fallback polling
     const interval = setInterval(() => {
       fetch(`http://localhost:8000/jobs/${jobId}`).then(r => r.json()).then(data => {
-        setJob(prev => {
-          if (data.status === 'COMPLETED' || data.status === 'ERROR') {
-             clearInterval(interval);
-          }
+        setJob((prev: any) => {
+          if (data.status === 'COMPLETED' || data.status === 'ERROR') clearInterval(interval);
           if (prev?.status === 'COMPLETED' || prev?.status === 'ERROR') return prev;
           if (data.status === 'COMPLETED' && data.timeline_path && prev?.status !== 'COMPLETED') {
             loadTimeline();
@@ -33,12 +36,18 @@ export default function EditorView({ jobId }: { jobId: string }) {
         });
       });
     }, 2000);
-
+  
     return () => {
       ws.close();
       clearInterval(interval);
     };
   }, [jobId]);
+
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [job?.logs]);
 
   const loadTimeline = () => {
     fetch(`http://localhost:8000/jobs/${jobId}/timeline`)
@@ -48,168 +57,265 @@ export default function EditorView({ jobId }: { jobId: string }) {
 
   const saveTimeline = async () => {
     setLoading(true);
-    await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(timeline)
-    });
-    // Request re-render
-    await fetch(`http://localhost:8000/jobs/${jobId}/render`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ draft_mode: true })
-    });
-    setLoading(false);
-  };
-
-  const renderFinal = async () => {
-    setLoading(true);
-    await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(timeline)
-    });
-    // Request final render
-    await fetch(`http://localhost:8000/jobs/${jobId}/render`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ draft_mode: false })
-    });
-    setLoading(false);
-  };
-
-  const [exporting, setExporting] = React.useState(false);
-
-  const exportProject = async () => {
-    setExporting(true);
+    toast("Re-rendering draft...", "info");
     try {
       await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(timeline)
       });
-      const resp = await fetch(`http://localhost:8000/jobs/${jobId}/export`, {
-        method: 'POST'
+      await fetch(`http://localhost:8000/jobs/${jobId}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_mode: true })
       });
-      const data = await resp.json();
-      if (data.export_path) {
-        window.open(`http://localhost:8000/media?path=${encodeURIComponent(data.export_path)}`, '_blank');
+      toast("Draft re-rendered successfully!", "success");
+    } catch {
+      toast("Error rendering draft", "error");
+    }
+    setLoading(false);
+  };
+
+  const renderFinal = async () => {
+    setLoading(true);
+    toast("Rendering final 1080p video...", "info");
+    try {
+      await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(timeline)
+      });
+      await fetch(`http://localhost:8000/jobs/${jobId}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_mode: false })
+      });
+      toast("Final render completed!", "success");
+    } catch {
+      toast("Error rendering final video", "error");
+    }
+    setLoading(false);
+  };
+
+  const exportProject = async () => {
+    setExporting(true);
+    toast("Preparing project bundle...", "info");
+    try {
+      await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(timeline)
+      });
+      const res = await fetch(`http://localhost:8000/jobs/${jobId}/export`, { method: 'POST' });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `openreel_project_${jobId}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        toast("Export downloaded!", "success");
+      } else {
+        throw new Error("Export failed");
       }
-    } finally {
-      setExporting(false);
+    } catch (e) {
+      console.error(e);
+      toast("Error exporting project bundle", "error");
     }
+    setExporting(false);
   };
 
-  const swapBackup = (sceneIndex: number) => {
+  const swapBackup = (idx: number) => {
     const t = { ...timeline };
-    const s = t.scenes[sceneIndex];
-    if (s.backup_asset) {
-      const temp = s.asset;
-      s.asset = s.backup_asset;
-      s.backup_asset = temp;
+    const scene = t.scenes[idx];
+    if (scene.backup_asset) {
+      const temp = scene.asset;
+      scene.asset = scene.backup_asset;
+      scene.backup_asset = temp;
       setTimeline(t);
+      toast(`Swapped asset for scene ${idx + 1}`, "success");
     }
   };
 
-  const updateCaption = (idx: number, val: string) => {
+  // Group captions into lines (chunk of 6 words)
+  const getCaptionLines = () => {
+    if (!timeline || !timeline.captions) return [];
+    const lines = [];
+    let currentLine = [];
+    for (let i = 0; i < timeline.captions.length; i++) {
+      currentLine.push({ ...timeline.captions[i], index: i });
+      if (currentLine.length === 6 || i === timeline.captions.length - 1) {
+        lines.push(currentLine);
+        currentLine = [];
+      }
+    }
+    return lines;
+  };
+
+  const handleLineChange = (lineIdx: number, newText: string, lines: any[]) => {
     const t = { ...timeline };
-    t.captions[idx].word = val;
+    const words = newText.split(' ').filter(w => w.length > 0);
+    const targetLine = lines[lineIdx];
+    
+    // Map new words back to the original objects in timeline
+    targetLine.forEach((cap: any, localIdx: number) => {
+      const w = words[localIdx] || '';
+      t.captions[cap.index].word = w;
+    });
+    
+    // If they typed extra words, append to the last word object
+    if (words.length > targetLine.length) {
+      const extra = words.slice(targetLine.length).join(' ');
+      t.captions[targetLine[targetLine.length - 1].index].word += ' ' + extra;
+    }
+    
     setTimeline(t);
   };
 
-  if (!job) return <div className="p-8 text-center">Loading...</div>;
+  if (!job) return (
+    <div className="flex h-[80vh] items-center justify-center">
+      <Loader2 className="w-10 h-10 animate-spin text-primary opacity-50" />
+    </div>
+  );
 
   if (job.status === 'PROCESSING' || job.status === 'PENDING') {
-    return (
-      <div className="bg-white p-12 rounded shadow text-center max-w-lg mx-auto mt-10">
-        <Loader className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Generating Video</h2>
-        <p className="text-gray-600 mb-6">{job.stage}</p>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${job.progress}%` }}></div>
-        </div>
-      </div>
-    );
+    return <ProcessingView job={job} logsEndRef={logsEndRef} />;
   }
 
   if (job.status === 'ERROR') {
     return (
-      <div className="bg-red-50 p-6 rounded border border-red-200">
-        <AlertTriangle className="text-red-500 mb-2 w-8 h-8" />
-        <h2 className="text-xl font-bold text-red-700">Error</h2>
-        <p className="text-red-600">{job.error}</p>
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="p-8 max-w-md w-full text-center space-y-6">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Pipeline Failed</h2>
+            <p className="text-sm text-muted-foreground">{job.error}</p>
+          </div>
+          <Button onClick={() => window.location.reload()} variant="primary" className="w-full">
+            Reload App
+          </Button>
+        </Card>
       </div>
     );
   }
 
-  if (!timeline) return <div className="p-8 text-center"><Loader className="w-8 h-8 animate-spin mx-auto text-blue-500" /></div>;
+  if (!timeline) return (
+    <div className="flex h-[80vh] items-center justify-center">
+      <Loader2 className="w-10 h-10 animate-spin text-primary opacity-50" />
+    </div>
+  );
 
   const currentVideo = job.final_video_path || job.draft_video_path;
+  const isFinal = !!job.final_video_path;
+
+  // Derive aspect ratio from timeline config
+  const res = timeline.resolution || [1920, 1080];
+  let aspectClass = "aspect-video"; // 16:9
+  if (res[0] < res[1]) aspectClass = "aspect-[9/16]"; // 9:16
+  else if (res[0] === res[1]) aspectClass = "aspect-square"; // 1:1
+
+  const captionLines = getCaptionLines();
 
   return (
-    <div className="grid lg:grid-cols-2 gap-6 items-start">
-      <div className="bg-white rounded shadow flex flex-col overflow-hidden sticky top-6">
-        <div className="bg-black aspect-[9/16] w-full max-h-[60vh] flex items-center justify-center relative">
+    <div className="grid lg:grid-cols-12 gap-8 items-start animate-in fade-in slide-in-from-bottom-4 pt-2">
+      
+      {/* --- Player Pane --- */}
+      <div className="lg:col-span-5 flex flex-col gap-6 sticky top-8">
+        
+        <div className={`w-full bg-black rounded-xl overflow-hidden shadow-xl border border-gray-800 ${aspectClass} relative flex items-center justify-center`}>
           {currentVideo ? (
-            <video controls src={`http://localhost:8000/media?path=${encodeURIComponent(currentVideo)}`} className="h-full object-contain" />
+            <video 
+              controls 
+              src={`http://localhost:8000/media?path=${encodeURIComponent(currentVideo)}`} 
+              className="w-full h-full object-contain"
+            />
           ) : (
-            <div className="text-white text-center">Video preview not available</div>
+            <div className="text-gray-600 flex flex-col items-center gap-2">
+              <MonitorPlay className="w-10 h-10 opacity-50" />
+              <span className="font-medium">Preview Unavailable</span>
+            </div>
+          )}
+          {isFinal && (
+            <div className="absolute top-4 right-4">
+              <Badge variant="success">Final Render</Badge>
+            </div>
+          )}
+          {!isFinal && currentVideo && (
+            <div className="absolute top-4 right-4">
+              <Badge variant="warning">Draft Preview</Badge>
+            </div>
           )}
         </div>
-        <div className="p-4 bg-gray-50 flex justify-between items-center border-t flex-wrap gap-2">
-          <span className="font-semibold text-gray-700">
-            {job.final_video_path ? "Final Preview" : "Draft Preview"}
-          </span>
-          <div className="flex gap-2">
-            <button onClick={saveTimeline} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 flex items-center gap-2">
-              {loading ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              Re-render Draft
-            </button>
-            <button onClick={renderFinal} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 flex items-center gap-2">
-              {loading ? <Loader className="w-4 h-4 animate-spin" /> : null}
-              Render Final (1080p)
-            </button>
-            <button onClick={exportProject} disabled={exporting} className="bg-purple-600 text-white px-4 py-2 rounded font-medium hover:bg-purple-700 flex items-center gap-2">
-              {exporting ? <Loader className="w-4 h-4 animate-spin" /> : null}
-              Export for Editor
-            </button>
+        
+        <Card className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Button onClick={saveTimeline} isLoading={loading} variant="secondary" className="w-full gap-2">
+              <RefreshCw className="w-4 h-4" /> Re-render Draft
+            </Button>
+            <Button onClick={renderFinal} isLoading={loading} variant="primary" className="w-full gap-2">
+              <Sparkles className="w-4 h-4" /> Render Final
+            </Button>
+            <Button onClick={exportProject} isLoading={exporting} variant="ghost" className="col-span-2 w-full gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-900">
+              <Download className="w-4 h-4" /> Export Project (FCPXML / Resolve)
+            </Button>
           </div>
-        </div>
+        </Card>
       </div>
 
-      <div className="space-y-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-bold text-lg mb-4 border-b pb-2">Scenes</h3>
+      {/* --- Editor Pane --- */}
+      <div className="lg:col-span-7 space-y-8 pb-12">
+        
+        {/* Scenes Editor */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <ImageIcon className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-xl text-foreground tracking-tight">Scenes & Assets</h3>
+          </div>
+          
           <div className="space-y-4">
             {timeline.scenes.map((s: any, idx: number) => (
-              <div key={s.id} className="border p-3 rounded bg-gray-50 flex flex-col gap-2">
-                <div className="flex justify-between items-start">
-                  <div className="text-sm text-gray-500 font-mono">[{s.start.toFixed(1)}s - {s.end.toFixed(1)}s]</div>
+              <Card key={s.id} className="p-5 overflow-hidden group hover:border-primary/50 transition-colors">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                    {s.start.toFixed(1)}s - {s.end.toFixed(1)}s
+                  </div>
                   {s.backup_asset && (
-                    <button onClick={() => swapBackup(idx)} className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded flex items-center gap-1">
-                      <ArrowLeftRight className="w-3 h-3" /> Swap Backup
-                    </button>
+                    <Button onClick={() => swapBackup(idx)} size="sm" variant="secondary" className="h-7 text-xs gap-1.5 rounded-full">
+                      <ArrowLeftRight className="w-3 h-3 text-primary" /> Swap Alternate
+                    </Button>
                   )}
                 </div>
-                <div className="text-sm italic text-gray-700 border-l-4 pl-2 border-gray-300 mb-2">"{s.text}"</div>
+                
+                <p className="text-sm font-medium text-foreground mb-4 pl-3 border-l-2 border-primary/40">
+                  "{s.text}"
+                </p>
                 
                 {s.asset ? (
-                  <div className="bg-blue-50 border border-blue-100 p-2 rounded text-xs flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-blue-800">{s.asset.source}</span>
-                      <span className="text-blue-600 ml-2">({s.asset.type})</span>
+                  <div className="bg-accent/50 border rounded-lg p-3 text-sm flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                      <span className="font-semibold text-foreground">{s.asset.source}</span>
+                      <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider px-1.5 py-0.5 bg-background rounded">{s.asset.type}</span>
                     </div>
-                    {s.asset.url && <a href={s.asset.url} target="_blank" className="text-blue-500 underline">View Source</a>}
+                    {s.asset.url && (
+                      <a href={s.asset.url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-medium text-xs">
+                        View Source
+                      </a>
+                    )}
                   </div>
                 ) : (
-                  <div className="bg-red-50 border border-red-100 p-2 rounded text-xs text-red-700 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" /> Missing Asset - Neutral Fallback Card will be rendered
+                  <div className="bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/50 p-3 rounded-lg flex items-center gap-2 text-red-800 dark:text-red-400 text-sm font-medium">
+                    <AlertTriangle className="w-4 h-4" /> Missing Asset (Black Fallback)
                   </div>
                 )}
                 
-                <div className="mt-2 grid grid-cols-2 gap-4 bg-white p-2 rounded border text-sm">
-                  <div>
-                    <label className="block text-gray-600 text-xs font-bold mb-1">Motion</label>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Motion</label>
                     <select 
                       value={s.motion || 'none'} 
                       onChange={(e) => {
@@ -217,15 +323,15 @@ export default function EditorView({ jobId }: { jobId: string }) {
                         t.scenes[idx].motion = e.target.value;
                         setTimeline(t);
                       }}
-                      className="w-full border rounded p-1"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="none">None</option>
                       <option value="kenburns_in">Ken Burns In</option>
                       <option value="kenburns_out">Ken Burns Out</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-gray-600 text-xs font-bold mb-1">Transition Out</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Transition Out</label>
                     <select 
                       value={s.transition_out?.type || 'none'} 
                       onChange={(e) => {
@@ -237,115 +343,131 @@ export default function EditorView({ jobId }: { jobId: string }) {
                         }
                         setTimeline(t);
                       }}
-                      className="w-full border rounded p-1"
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="none">None</option>
-                      <option value="crossfade">Crossfade</option>
+                      <option value="none">None Cut</option>
+                      <option value="crossfade">Crossfade (0.4s)</option>
                     </select>
                   </div>
                 </div>
-                
-                <div className="mt-1">
-                  <button 
-                    onClick={() => {
-                      const t = { ...timeline };
-                      if (!t.popups) t.popups = [];
-                      t.popups.push({ at: s.start, duration: Math.min(2.0, s.end - s.start), type: 'text', path: 'CALLOUT TEXT', position: 'center', animation: 'fade' });
-                      setTimeline(t);
-                    }}
-                    className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded"
-                  >
-                    + Add Popup Overlay
-                  </button>
-                </div>
-              </div>
+              </Card>
             ))}
           </div>
+        </div>
+
+        {/* Captions Editor */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Type className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-xl text-foreground tracking-tight">Captions</h3>
+          </div>
+          <Card className="p-5">
+            <p className="text-xs text-muted-foreground mb-4">Edit transcribed text. Timing remains locked to the audio track.</p>
+            <div className="space-y-2">
+              {captionLines.map((line: any[], lineIdx: number) => {
+                const lineStr = line.map(c => c.word).join(' ').replace(/\s+/g, ' ').trim();
+                return (
+                  <Input 
+                    key={lineIdx}
+                    value={lineStr}
+                    onChange={(e) => handleLineChange(lineIdx, e.target.value, captionLines)}
+                    className="font-medium"
+                  />
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+
+        {/* Popups */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-xl text-foreground tracking-tight">Overlays</h3>
+            </div>
+            <Button size="sm" onClick={() => {
+              const t = { ...timeline };
+              if (!t.popups) t.popups = [];
+              t.popups.push({ at: 0.0, duration: 2.0, type: 'text', text: 'CALLOUT', position: 'center', animation: 'fade' });
+              setTimeline(t);
+            }}>
+              + Add Overlay
+            </Button>
+          </div>
+          
+          <Card className="p-5">
+            {timeline.popups && timeline.popups.length > 0 ? (
+              <div className="space-y-3">
+                {timeline.popups.map((p: any, idx: number) => (
+                  <div key={idx} className="flex flex-wrap items-center gap-3 bg-muted/50 border rounded-lg p-3">
+                    <span className="font-mono text-xs bg-background border px-2 py-1 rounded text-muted-foreground">
+                      {p.at.toFixed(1)}s
+                    </span>
+                    <select 
+                      value={p.type} 
+                      onChange={e => { const t = {...timeline}; t.popups[idx].type = e.target.value; setTimeline(t); }}
+                      className="border border-input rounded-md p-1.5 bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="text">Text</option>
+                      <option value="image">Image</option>
+                      <option value="shape">Shape</option>
+                    </select>
+                    
+                    {p.type === 'shape' ? (
+                      <>
+                        <select 
+                          value={p.shape || 'rectangle'} 
+                          onChange={e => { const t = {...timeline}; t.popups[idx].shape = e.target.value; setTimeline(t); }}
+                          className="border border-input rounded-md p-1.5 bg-background text-sm outline-none"
+                        >
+                          <option value="rectangle">Rectangle</option>
+                          <option value="circle">Circle</option>
+                        </select>
+                        <select 
+                          value={p.color || 'red'} 
+                          onChange={e => { const t = {...timeline}; t.popups[idx].color = e.target.value; setTimeline(t); }}
+                          className="border border-input rounded-md p-1.5 bg-background text-sm outline-none"
+                        >
+                          <option value="red">Red</option>
+                          <option value="green">Green</option>
+                          <option value="blue">Blue</option>
+                        </select>
+                      </>
+                    ) : (
+                      <Input 
+                        value={p.type === 'text' ? (p.text || p.path || '') : p.path} 
+                        onChange={e => { 
+                          const t = {...timeline}; 
+                          if (p.type === 'text') { t.popups[idx].text = e.target.value; }
+                          else { t.popups[idx].path = e.target.value; }
+                          setTimeline(t); 
+                        }}
+                        placeholder={p.type === 'text' ? "Callout Text" : "URL or path"}
+                        className="flex-1 h-8"
+                      />
+                    )}
+                    <select 
+                      value={p.position || 'center'} 
+                      onChange={e => { const t = {...timeline}; t.popups[idx].position = e.target.value; setTimeline(t); }}
+                      className="border border-input rounded-md p-1.5 bg-background text-sm outline-none"
+                    >
+                      <option value="center">Center</option>
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                    <button onClick={() => { const t = {...timeline}; t.popups.splice(idx,1); setTimeline(t); }} className="text-muted-foreground hover:text-red-500 p-1.5 ml-auto">
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No popups added yet.</p>
+            )}
+          </Card>
         </div>
         
-        {timeline.popups && timeline.popups.length > 0 && (
-          <div className="bg-white p-4 rounded shadow mt-6">
-            <h3 className="font-bold text-lg mb-4 border-b pb-2">Popups / Overlays</h3>
-            <div className="space-y-2">
-              {timeline.popups.map((p: any, idx: number) => (
-                <div key={idx} className="flex gap-2 text-sm items-center border p-2 rounded flex-wrap">
-                  <span className="font-mono text-gray-500 w-12">{p.at.toFixed(1)}s</span>
-                  <select 
-                    value={p.type} 
-                    onChange={e => { const t = {...timeline}; t.popups[idx].type = e.target.value; setTimeline(t); }}
-                    className="border rounded p-1"
-                  >
-                    <option value="text">Text</option>
-                    <option value="image">Image</option>
-                    <option value="shape">Shape</option>
-                  </select>
-                  
-                  {p.type === 'shape' ? (
-                    <>
-                      <select 
-                        value={p.shape || 'rectangle'} 
-                        onChange={e => { const t = {...timeline}; t.popups[idx].shape = e.target.value; setTimeline(t); }}
-                        className="border rounded p-1"
-                      >
-                        <option value="rectangle">Rectangle</option>
-                        <option value="circle">Circle</option>
-                      </select>
-                      <select 
-                        value={p.color || 'red'} 
-                        onChange={e => { const t = {...timeline}; t.popups[idx].color = e.target.value; setTimeline(t); }}
-                        className="border rounded p-1"
-                      >
-                        <option value="red">Red</option>
-                        <option value="green">Green</option>
-                        <option value="blue">Blue</option>
-                        <option value="black">Black</option>
-                        <option value="white">White</option>
-                      </select>
-                    </>
-                  ) : (
-                    <input 
-                      type="text" 
-                      value={p.type === 'text' ? (p.text || p.path || '') : p.path} 
-                      onChange={e => { 
-                        const t = {...timeline}; 
-                        if (p.type === 'text') { t.popups[idx].text = e.target.value; }
-                        else { t.popups[idx].path = e.target.value; }
-                        setTimeline(t); 
-                      }}
-                      className="border rounded px-2 py-1 flex-1"
-                      placeholder={p.type === 'text' ? "Text Callout" : "data/uploads/image.png"}
-                    />
-                  )}
-                  <select 
-                    value={p.position || 'center'} 
-                    onChange={e => { const t = {...timeline}; t.popups[idx].position = e.target.value; setTimeline(t); }}
-                    className="border rounded p-1"
-                  >
-                    <option value="center">Center</option>
-                    <option value="top">Top</option>
-                    <option value="bottom">Bottom</option>
-                  </select>
-                  <button onClick={() => { const t = {...timeline}; t.popups.splice(idx,1); setTimeline(t); }} className="text-red-500 font-bold px-2 hover:bg-red-50 rounded">X</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-bold text-lg mb-4 border-b pb-2">Captions</h3>
-          <div className="flex flex-wrap gap-2">
-            {timeline.captions.map((c: any, idx: number) => (
-              <input 
-                key={idx}
-                type="text"
-                value={c.word}
-                onChange={(e) => updateCaption(idx, e.target.value)}
-                className="border rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

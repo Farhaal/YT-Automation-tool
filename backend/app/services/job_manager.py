@@ -32,13 +32,18 @@ class JobManager:
             "script": script,
             "timeline_path": None,
             "draft_video_path": None,
-            "error": None
+            "error": None,
+            "logs": []
         }
         self.update_job(job_id)
         
-    def update_job(self, job_id: str, **kwargs):
+    def update_job(self, job_id: str, log: Optional[str] = None, **kwargs):
         if job_id in self.jobs:
             self.jobs[job_id].update(kwargs)
+            if log:
+                if "logs" not in self.jobs[job_id]:
+                    self.jobs[job_id]["logs"] = []
+                self.jobs[job_id]["logs"].append(log)
             self._save(job_id)
             
     def get_job(self, job_id: str):

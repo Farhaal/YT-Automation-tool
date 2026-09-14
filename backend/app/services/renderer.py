@@ -140,8 +140,12 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
                     method="caption", size=(int(W*0.9), None)
                 )
                 
-                # Position near bottom with 5% margin
-                y_pos = int(H * 0.95) - (txt.h or int(H * 0.06))
+                # Position near bottom with 15% title-safe margin
+                margin = int(H * 0.15)
+                text_h = txt.h or int(H * 0.10)
+                y_pos = H - margin - text_h
+                y_pos = max(int(H * 0.60), min(y_pos, int(H * 0.90) - text_h))
+                
                 txt = txt.with_start(start_time).with_end(end_time).with_position(("center", y_pos))
                 resources_to_close.append(txt)
                 clips.append(txt)

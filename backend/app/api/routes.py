@@ -35,8 +35,10 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         except Exception:
             pass
 
-    def update(progress, stage, status="PROCESSING", **kwargs):
-        job_manager.update_job(job_id, progress=progress, stage=stage, status=status, **kwargs)
+    def update(progress, stage, status="PROCESSING", log_msg=None, **kwargs):
+        if log_msg is None:
+            log_msg = f"[{progress}%] {stage}"
+        job_manager.update_job(job_id, log=log_msg, progress=progress, stage=stage, status=status, **kwargs)
         job = job_manager.get_job(job_id)
         sync_notify(job_id, job)
         logger.info(f"Job {job_id} [{progress}%]: {stage}")
@@ -51,20 +53,20 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         script = job.get("script")
         
         if not audio_path and script:
-            update(10, "Synthesizing audio")
+            update(10, "Synthesizing audio", log_msg="Generating voiceover from text script using TTS...")
             from backend.app.services.tts import synthesize
             audio_path = str(synthesize(script))
             job_manager.update_job(job_id, audio_path=audio_path)
             
-        update(30, "Transcribing")
+        update(20, "Transcribing", log_msg="Running Whisper model to transcribe audio and map word-level timestamps...")
         transcription = transcribe_audio(audio_path)
         words = transcription.get("words", [])
         
-        update(50, "Segmenting scenes")
+        update(40, "Segmenting scenes", log_msg="Analyzing transcript with NLP to segment scenes and extract visual search queries...")
         from backend.app.services.nlp import process_script_to_scenes
         scenes = process_script_to_scenes(words)
         
-        update(70, "Finding assets")
+        update(60, "Finding assets", log_msg=f"Searching Pexels, Pixabay, Openverse, and Wikimedia for {len(scenes)} scenes...")
         from backend.app.services.assets.manager import AssetManager
         
         s = load_settings()
@@ -75,7 +77,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         asset_manager = AssetManager(cache_dir=DATA / "assets")
         scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio)
                 
-        update(80, "Assembling timeline")
+        update(80, "Building timeline", log_msg="Assembling final timeline with Ken Burns motion, transitions, and generated subtitles...")
         from backend.app.services.timeline import TimelineAssembler
         schema_path = Path(__file__).parent.parent.parent.parent / "shared" / "timeline.schema.json"
         assembler = TimelineAssembler(schema_path=schema_path)
@@ -93,11 +95,11 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         with open(timeline_path, "w", encoding="utf-8") as f:
             json.dump(timeline, f, indent=2)
             
-        update(90, "Rendering draft", timeline_path=str(timeline_path))
+        update(90, "Rendering draft", log_msg="Rendering draft video file via FFmpeg (NVENC/CPU)...", timeline_path=str(timeline_path))
         from backend.app.services.renderer import render_timeline
         draft_video_path = render_timeline(timeline_path, draft_mode=True)
         
-        update(100, "Done", status="COMPLETED", draft_video_path=str(draft_video_path))
+        update(100, "Done", log_msg="Video rendering completed successfully!", status="COMPLETED", draft_video_path=str(draft_video_path))
         
     except Exception as e:
         import traceback

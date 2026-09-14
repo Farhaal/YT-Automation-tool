@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
+import { Key, Bot, Trash2 } from 'lucide-react';
+import { Card, Button, Badge, Input, useToast } from './ui';
 
 export default function SettingsView() {
   const [status, setStatus] = useState<any>({});
   
-  // Media Keys
   const [pexels, setPexels] = useState('');
   const [pixabay, setPixabay] = useState('');
   
-  // LLM Settings
   const [llmProvider, setLlmProvider] = useState('');
   const [llmApiKey, setLlmApiKey] = useState('');
   const [llmModel, setLlmModel] = useState('');
   const [llmBaseUrl, setLlmBaseUrl] = useState('');
+
+  const { toast } = useToast();
 
   const load = () => {
     fetch('http://localhost:8000/settings')
@@ -26,158 +28,208 @@ export default function SettingsView() {
 
   useEffect(() => { load(); }, []);
 
-  const saveMedia = () => {
-    fetch('http://localhost:8000/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pexels_key: pexels, pixabay_key: pixabay })
-    }).then(() => {
+  const saveMedia = async () => {
+    try {
+      await fetch('http://localhost:8000/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pexels_key: pexels, pixabay_key: pixabay })
+      });
       setPexels('');
       setPixabay('');
       load();
-    });
+      toast("Media settings saved", "success");
+    } catch {
+      toast("Error saving settings", "error");
+    }
   };
 
-  const saveLlm = () => {
-    fetch('http://localhost:8000/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        llm_provider: llmProvider,
-        llm_api_key: llmApiKey,
-        llm_model: llmModel,
-        llm_base_url: llmBaseUrl
-      })
-    }).then(() => {
+  const saveLlm = async () => {
+    try {
+      await fetch('http://localhost:8000/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          llm_provider: llmProvider,
+          llm_api_key: llmApiKey,
+          llm_model: llmModel,
+          llm_base_url: llmBaseUrl
+        })
+      });
       setLlmApiKey('');
       load();
-    });
+      toast("LLM settings saved", "success");
+    } catch {
+      toast("Error saving LLM config", "error");
+    }
   };
 
-  const remove = (provider: string) => {
-    fetch(`http://localhost:8000/settings/${provider}`, { method: 'DELETE' }).then(() => {
+  const remove = async (provider: string) => {
+    try {
+      await fetch(`http://localhost:8000/settings/${provider}`, { method: 'DELETE' });
       if (provider === 'llm') {
         setLlmProvider('');
         setLlmModel('');
         setLlmBaseUrl('');
       }
       load();
-    });
+      toast(`Cleared ${provider} config`, "success");
+    } catch {
+      toast("Error clearing config", "error");
+    }
   };
 
   return (
-    <div className="bg-white p-6 rounded shadow max-w-2xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 pt-4 pb-12">
       
-      {/* Media Providers */}
       <div>
-        <h2 className="text-2xl font-bold mb-6">Stock Media Providers</h2>
-        <div className="space-y-6">
-          <div className="border p-4 rounded">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-lg">Pexels API Key</h3>
-              <span className={`px-2 py-1 text-xs rounded ${status.pexels === 'Configured' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>
-                {status.pexels || 'Loading...'}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <input type="password" value={pexels} onChange={e => setPexels(e.target.value)} placeholder="Enter Pexels Key" className="border p-2 rounded flex-1" />
-              <button onClick={saveMedia} className="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-              <button onClick={() => remove('pexels')} className="bg-red-100 text-red-600 px-4 py-2 rounded">Clear</button>
-            </div>
-          </div>
-
-          <div className="border p-4 rounded">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-lg">Pixabay API Key</h3>
-              <span className={`px-2 py-1 text-xs rounded ${status.pixabay === 'Configured' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>
-                {status.pixabay || 'Loading...'}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <input type="password" value={pixabay} onChange={e => setPixabay(e.target.value)} placeholder="Enter Pixabay Key" className="border p-2 rounded flex-1" />
-              <button onClick={saveMedia} className="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
-              <button onClick={() => remove('pixabay')} className="bg-red-100 text-red-600 px-4 py-2 rounded">Clear</button>
-            </div>
-          </div>
-
-          <div className="border p-4 rounded bg-gray-50">
-            <h3 className="font-semibold text-lg mb-2">Openverse & Wikimedia</h3>
-            <p className="text-sm text-gray-600">These providers are fully free and require no keys. They are always active.</p>
-          </div>
-        </div>
+        <h2 className="text-3xl font-extrabold tracking-tight text-foreground mb-2">Settings</h2>
+        <p className="text-muted-foreground">Manage your local integration keys and models.</p>
       </div>
 
-      <hr />
-
-      {/* Optional LLM */}
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Optional AI Model</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          For smarter visual search query extraction. If skipped, standard fast NLP (spaCy + YAKE) is used instead. Your key is never shared or logged.
-        </p>
-
-        <div className="border p-4 rounded bg-indigo-50 border-indigo-100">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-semibold text-lg text-indigo-900">LLM Configuration</h3>
-            <span className={`px-2 py-1 text-xs rounded ${status.llm_api_key === 'Configured' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-              {status.llm_api_key || 'Loading...'}
-            </span>
+      <div className="grid md:grid-cols-2 gap-8">
+        
+        {/* Media */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Key className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-xl text-foreground">Stock Media</h3>
           </div>
 
-          <div className="space-y-4">
+          <Card className="p-5 space-y-5">
             <div>
-              <label className="block text-sm font-medium mb-1">Provider</label>
-              <select value={llmProvider} onChange={e => setLlmProvider(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                <option value="">-- Select Provider --</option>
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="groq">Groq</option>
-                <option value="ollama">Ollama (Local)</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-1">API Key</label>
-              <input 
-                type="password" 
-                value={llmApiKey} 
-                onChange={e => setLlmApiKey(e.target.value)} 
-                placeholder={status.llm_api_key === 'Configured' ? '******** (configured)' : 'Enter API Key (Optional for Ollama)'}
-                className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none" 
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Model Name (Optional)</label>
-                <input 
-                  type="text" 
-                  value={llmModel} 
-                  onChange={e => setLlmModel(e.target.value)} 
-                  placeholder="e.g. gpt-4o-mini"
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none" 
-                />
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-semibold text-foreground">Pexels API Key</label>
+                <Badge variant={status.pexels === 'Configured' ? 'success' : 'default'}>
+                  {status.pexels === 'Configured' ? 'Active' : 'Missing'}
+                </Badge>
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Base URL (Optional)</label>
-                <input 
-                  type="text" 
-                  value={llmBaseUrl} 
-                  onChange={e => setLlmBaseUrl(e.target.value)} 
-                  placeholder="Custom API endpoint"
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none" 
+              <div className="flex gap-2">
+                <Input 
+                  type="password" 
+                  value={pexels} 
+                  onChange={e => setPexels(e.target.value)} 
+                  placeholder={status.pexels === 'Configured' ? "********" : "Enter Key"} 
                 />
+                <Button onClick={saveMedia}>Save</Button>
+                {status.pexels === 'Configured' && (
+                  <Button variant="ghost" onClick={() => remove('pexels')} className="px-3 text-red-500 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <button onClick={saveLlm} className="bg-indigo-600 text-white px-6 py-2 rounded font-medium hover:bg-indigo-700">Save LLM Settings</button>
-              <button onClick={() => remove('llm')} className="bg-gray-200 text-gray-700 px-6 py-2 rounded font-medium hover:bg-gray-300">Clear</button>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-semibold text-foreground">Pixabay API Key</label>
+                <Badge variant={status.pixabay === 'Configured' ? 'success' : 'default'}>
+                  {status.pixabay === 'Configured' ? 'Active' : 'Missing'}
+                </Badge>
+              </div>
+              <div className="flex gap-2">
+                <Input 
+                  type="password" 
+                  value={pixabay} 
+                  onChange={e => setPixabay(e.target.value)} 
+                  placeholder={status.pixabay === 'Configured' ? "********" : "Enter Key"} 
+                />
+                <Button onClick={saveMedia}>Save</Button>
+                {status.pixabay === 'Configured' && (
+                  <Button variant="ghost" onClick={() => remove('pixabay')} className="px-3 text-red-500 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
 
+            <div className="bg-muted p-4 rounded-lg">
+              <h4 className="text-sm font-semibold mb-1 text-foreground">Openverse & Wikimedia</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                These providers are fully free and require no keys. They remain always active as fallbacks.
+              </p>
+            </div>
+          </Card>
+        </div>
+
+        {/* LLM */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Bot className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-xl text-foreground">AI Model (Optional)</h3>
+          </div>
+
+          <Card className="p-5 space-y-5">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div>
+                <h4 className="font-semibold text-sm text-foreground">Topic-Aware Context</h4>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">Overrides the default NLP extractor for smarter visual queries.</p>
+              </div>
+              <Badge variant={status.llm_api_key === 'Configured' ? 'success' : 'default'}>
+                {status.llm_api_key === 'Configured' ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Provider</label>
+                <select 
+                  value={llmProvider} 
+                  onChange={e => setLlmProvider(e.target.value)} 
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">-- Select --</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="groq">Groq</option>
+                  <option value="ollama">Ollama (Local)</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">API Key</label>
+                <Input 
+                  type="password" 
+                  value={llmApiKey} 
+                  onChange={e => setLlmApiKey(e.target.value)} 
+                  placeholder={status.llm_api_key === 'Configured' ? '********' : 'sk-... (Optional for Ollama)'}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">Model Override</label>
+                  <Input 
+                    type="text" 
+                    value={llmModel} 
+                    onChange={e => setLlmModel(e.target.value)} 
+                    placeholder="e.g. gpt-4o-mini"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">Base URL</label>
+                  <Input 
+                    type="text" 
+                    value={llmBaseUrl} 
+                    onChange={e => setLlmBaseUrl(e.target.value)} 
+                    placeholder="Custom endpoint"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button onClick={saveLlm} className="flex-1">Save Configuration</Button>
+                {status.llm_api_key === 'Configured' && (
+                  <Button variant="ghost" onClick={() => remove('llm')} className="px-3 text-red-500 hover:text-red-600 border border-input">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+
+      </div>
     </div>
   );
 }
