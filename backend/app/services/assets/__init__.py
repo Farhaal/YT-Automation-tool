@@ -22,6 +22,10 @@ class AssetMetadata(BaseModel):
     height: int = 0
     duration: float = 0.0
     
+    title: Optional[str] = None
+    description: Optional[str] = None
+    tags: list[str] = []
+    
     query: Optional[str] = None
     query_priority: int = 0
     result_position: int = 0

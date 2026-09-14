@@ -67,7 +67,7 @@ piper_voices/
 # ─────────────────────────────────────────────────────────
 #  Media cache & render output  (large / regenerable)
 # ─────────────────────────────────────────────────────────
-data/            # project-local models, caches, downloads, renders (containment)
+data/
 cache/
 asset_cache/
 downloads/

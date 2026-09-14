@@ -32,7 +32,7 @@ class TimelineAssembler:
             "attribution_text": asset_meta.get("attribution_text")
         }
 
-    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape", enable_motion: bool = True) -> Dict[str, Any]:
         timeline_scenes = []
         for i, scene in enumerate(scenes):
             asset_meta = scene.get("asset")
@@ -54,7 +54,7 @@ class TimelineAssembler:
                 "text": scene["text"],
                 "asset": timeline_asset,
                 "backup_asset": timeline_backup,
-                "motion": "kenburns_in",
+                "motion": "kenburns_in" if enable_motion else "none",
             }
             if transition:
                 timeline_scene["transition_out"] = transition
@@ -69,21 +69,34 @@ class TimelineAssembler:
                 "end": w["end"]
             })
             
+        width, height = 1920, 1080
+        if aspect_ratio == "portrait":
+            width, height = 1080, 1920
+        elif aspect_ratio == "square":
+            width, height = 1080, 1080
+            
         timeline = {
             "version": 1,
-            "resolution": {"width": 1080, "height": 1920, "fps": 30},
+            "resolution": {"width": width, "height": height, "fps": 30},
             "audio": {"path": str(audio_path), "duration": audio_duration},
             "scenes": timeline_scenes,
             "captions": captions,
             "popups": []
         }
         
-        # Schema Validation
+        self.validate(timeline)
+        return timeline
+
+    def validate(self, timeline: Dict[str, Any]):
         try:
             jsonschema.validate(instance=timeline, schema=self.schema)
         except jsonschema.exceptions.ValidationError as e:
             logger.error(f"Timeline validation failed: {e.message}")
             raise ValueError(f"Invalid timeline generated: {e.message}")
+            
+        audio_duration = timeline["audio"]["duration"]
+        timeline_scenes = timeline.get("scenes", [])
+        captions = timeline.get("captions", [])
             
         # Semantic Validation
         last_scene_end = 0.0
@@ -113,5 +126,3 @@ class TimelineAssembler:
             if w["end"] > audio_duration:
                 raise ValueError(f"Caption word '{w['word']}' end exceeds audio_duration")
             last_word_end = max(last_word_end, w["end"])
-            
-        return timeline

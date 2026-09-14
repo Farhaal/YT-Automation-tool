@@ -123,7 +123,7 @@ def test_asset_manager_comprehensive(mock_httpx):
                     "query": {
                         "pages": {
                             "999": {
-                                "title": "File:WikiImage.jpg",
+                                "title": "File:primary WikiImage.jpg",
                                 "imageinfo": [
                                     {
                                         "url": "http://wiki.jpg",
@@ -207,7 +207,7 @@ def test_asset_manager_comprehensive(mock_httpx):
         # This explicitly proves the "relevance-first" ranking policy!
         backup = s1.get("backup_asset")
         assert backup is not None
-        assert backup["asset_key"] == "Wikimedia:999"
+        assert backup["asset_key"] == "Openverse:ov_img"
         assert backup["query"] == "primary"
         
         # Ensure httpx.stream was NOT called for secondary_vid because we pre-cached it
@@ -323,4 +323,121 @@ def test_lexicographic_ranking_regression():
         # its query_priority (0) strictly beats the secondary's query_priority (1) in a tuple comparison.
         assert ranked[0].asset_key == "Openverse:1"
         assert ranked[1].asset_key == "Pexels:2"
+
+def test_asset_relevance_ranking():
+    import tempfile
+    from pathlib import Path
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.manager import AssetManager
+
+    with tempfile.TemporaryDirectory() as td:
+        manager = AssetManager(cache_dir=Path(td))
+        scene_query = "beautiful sunset over mountains"
+        
+        # Asset 1: Perfect match in title and tags
+        asset_perfect = AssetMetadata(
+            provider="Pexels",
+            provider_asset_id="1",
+            asset_key="Pexels:1",
+            media_url="http://vid1",
+            media_type="video",
+            width=1920,
+            height=1080,
+            title="A beautiful sunset",
+            tags=["mountains", "nature"],
+            query="sunset",
+            query_priority=0,
+            result_position=0
+        )
+        
+        # Asset 2: High quality video, but completely unrelated title/tags
+        asset_unrelated = AssetMetadata(
+            provider="Pexels",
+            provider_asset_id="2",
+            asset_key="Pexels:2",
+            media_url="http://vid2",
+            media_type="video",
+            width=3840,
+            height=2160, # better resolution
+            title="City traffic night",
+            tags=["cars", "city"],
+            query="city", # accidentally returned by a bad search provider
+            query_priority=0,
+            result_position=1
+        )
+        
+        # Asset 3: Partial match
+        asset_partial = AssetMetadata(
+            provider="Pixabay",
+            provider_asset_id="3",
+            asset_key="Pixabay:3",
+            media_url="http://vid3",
+            media_type="video",
+            width=1920,
+            height=1080,
+            title="Mountains",
+            tags=["landscape"],
+            query="mountains",
+            query_priority=1,
+            result_position=0
+        )
+        
+        assets = [asset_unrelated, asset_partial, asset_perfect]
+        ranked = manager.rank_assets(assets, orientation="landscape", scene_duration=5.0, scene_query=scene_query)
+        
+        # Rankings:
+        # 1. Perfect match (3 tokens: beautiful, sunset, mountains)
+        # 2. Partial match (1 token: mountains)
+        # 3. Unrelated (0 tokens) -> Must be ranked absolutely last (-1 penalty)
+        
+        assert ranked[0].asset_key == "Pexels:1"
+        assert ranked[1].asset_key == "Pixabay:3"
+        assert ranked[2].asset_key == "Pexels:2"
+
+def test_pixabay_tags_relevance_ranking(tmp_path):
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.manager import AssetManager
+
+    manager = AssetManager(cache_dir=tmp_path)
+    scene_query = "futuristic city cyberpunk neon"
+    
+    # Candidate 1: High quality Pixabay asset, but tags DO NOT match the scene query
+    # (Maybe the fallback query "city" got us here, but we want a better match)
+    asset_high_quality_no_overlap = AssetMetadata(
+        provider="Pixabay",
+        provider_asset_id="1",
+        asset_key="Pixabay:1",
+        media_url="http://vid1",
+        media_type="video",
+        width=3840,
+        height=2160, # 4k
+        duration=15.0,
+        tags=["modern", "architecture", "urban"], # No overlap with scene_query
+        query="city",
+        query_priority=0,
+        result_position=0
+    )
+    
+    # Candidate 2: Lower quality Pixabay asset, but tags DO match the scene query
+    asset_lower_quality_overlap = AssetMetadata(
+        provider="Pixabay",
+        provider_asset_id="2",
+        asset_key="Pixabay:2",
+        media_url="http://vid2",
+        media_type="video",
+        width=1920,
+        height=1080, # 1080p
+        duration=10.0,
+        tags=["futuristic", "cyberpunk", "cityscape"], # "futuristic", "cyberpunk" overlaps
+        query="city",
+        query_priority=0,
+        result_position=1
+    )
+    
+    assets = [asset_high_quality_no_overlap, asset_lower_quality_overlap]
+    ranked = manager.rank_assets(assets, orientation="landscape", scene_duration=5.0, scene_query=scene_query)
+    
+    # The one with overlap MUST rank first!
+    assert ranked[0].asset_key == "Pixabay:2"
+    assert ranked[1].asset_key == "Pixabay:1"
 

@@ -224,3 +224,48 @@ def test_broken_asset_fallback_and_timeline_immutable(tmp_path):
     with open(timeline_path, "r", encoding="utf-8") as f:
         timeline_after = json.load(f)
     assert timeline == timeline_after
+
+
+def test_motion_and_popups_renderer(tmp_path):
+    media = create_test_media(tmp_path)
+    import json
+    from backend.app.services.renderer import render_timeline
+    
+    timeline = {
+        "version": 1,
+        "resolution": {"width": 320, "height": 320, "fps": 10},
+        "audio": {"path": media["audio"], "duration": 2.0},
+        "scenes": [
+            {
+                "id": "s1", "start": 0.0, "end": 1.0, "text": "Scene 1",
+                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:1", "provider_asset_id": "1"},
+                "motion": "kenburns_in"
+            },
+            {
+                "id": "s2", "start": 1.0, "end": 2.0, "text": "Scene 2",
+                "asset": {"type": "image", "path": media["image"], "source": "mock", "author": "mock", "license": "mock", "url": "mock", "asset_key": "mock:2", "provider_asset_id": "2"},
+                "motion": "kenburns_out"
+            }
+        ],
+        "captions": [],
+        "popups": [
+            {"at": 0.0, "duration": 1.0, "type": "text", "text": "Hello text", "position": "center", "animation": "fade"},
+            {"at": 1.0, "duration": 1.0, "type": "shape", "shape": "circle", "color": "red", "size": 100, "position": "top", "animation": "slide"}
+        ]
+    }
+    
+    timeline_path = tmp_path / "timeline_motion.json"
+    with open(timeline_path, "w", encoding="utf-8") as f_time:
+        json.dump(timeline, f_time)
+        
+    out_path = render_timeline(timeline_path, draft_mode=True)
+    assert out_path.exists()
+    
+    from moviepy import VideoFileClip
+    import pytest
+    try:
+        clip = VideoFileClip(str(out_path))
+        assert clip.duration > 1.8
+        clip.close()
+    except Exception as e:
+        pytest.fail(f"Render output invalid: {e}")
