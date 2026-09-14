@@ -113,7 +113,7 @@ Pexels and Pixabay require free API keys. These are completely optional, user-ow
 Openverse and Wikimedia Commons do not require any API keys and will work out-of-the-box.
 
 ### Optional AI Model Key
-For smarter visual search query extraction, you can optionally provide an LLM API key (OpenAI, OpenRouter, Groq, or local Ollama) in the Settings page. This will analyze the script context to generate better search queries. If you don't provide a key, OpenReel falls back to a fast, built-in NLP keyword extractor (spaCy + YAKE). Your API keys are kept strictly local.
+For smarter visual search query extraction, you can optionally provide an LLM API key (OpenAI, OpenRouter, Groq, or local Ollama) in the Settings page. When configured, OpenReel performs a two-stage topic-aware analysis: it first summarizes the overall visual subject of your transcript, and then uses that context to generate highly accurate, on-topic search queries for each scene. If you don't provide a key, OpenReel falls back to a fast, built-in NLP keyword extractor (spaCy + YAKE). Your API keys are kept strictly local.
 
 ## Performance & Model Size
 
@@ -125,7 +125,7 @@ OpenReel is designed to be configurable for a balance of speed and quality:
 
 ## Roadmap
 
-- [ ] P9: Full-resolution export and auto-generated credits file
+- [ ] Auto-generated credits file
 - [ ] P10: App packaging and polish
 - [ ] P11: Visual verification (optional re-ranking)
 

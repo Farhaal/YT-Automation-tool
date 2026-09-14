@@ -6,6 +6,7 @@ from typing import List, Optional
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
 
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"  # noqa: E501
 
 class AssetProvider(ABC):
     def __init__(self, name: str):
@@ -28,7 +29,7 @@ class AssetProvider(ABC):
             
         try:
             import httpx
-            with httpx.stream("GET", asset.media_url, follow_redirects=True, timeout=15.0) as response:
+            with httpx.stream("GET", asset.media_url, headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=15.0) as response:  # noqa: E501
                 response.raise_for_status()
                 with open(local_path, "wb") as f:
                     for chunk in response.iter_bytes():

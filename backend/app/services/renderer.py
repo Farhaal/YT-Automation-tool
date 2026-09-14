@@ -58,9 +58,14 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
 
         scenes = timeline.get("scenes", [])
         for i, scene in enumerate(scenes):
-            start = scene["start"]
-            end = scene["end"]
-            dur = end - start
+            # Make visual scenes contiguous to avoid black frames
+            visual_start = 0.0 if i == 0 else scene["start"]
+            visual_end = scenes[i+1]["start"] if i < len(scenes) - 1 else audio_dur
+            
+            # Clamp bounds
+            visual_start = min(max(visual_start, 0.0), audio_dur)
+            visual_end = max(visual_start, min(visual_end, audio_dur))
+            dur = visual_end - visual_start
             
             asset = scene.get("asset")
             clip = None
@@ -96,9 +101,10 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
             if clip is None:
                 clip = create_fallback(dur, scene["text"])
                 
-            clip = CompositeVideoClip([clip.with_position("center")], size=(W, H)).with_duration(dur).with_start(start)
+            clip = CompositeVideoClip([clip.with_position("center")], size=(W, H)).with_duration(dur).with_start(visual_start)  # noqa: E501
             resources_to_close.append(clip)
             
+            # Transition overlap logic
             if i > 0 and "transition_out" in scenes[i-1]:
                 tdur = scenes[i-1]["transition_out"]["duration"]
                 clip = clip.with_effects([vfx.CrossFadeIn(tdur)])
@@ -110,14 +116,37 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
                 
             clips.append(clip)
             
-        for w in timeline.get("captions", []):
+        captions = timeline.get("captions", [])
+        grouped_lines = []
+        current_line = []
+        for w in captions:
+            current_line.append(w)
+            is_end = w["word"].endswith(('.', '?', '!', '\n'))
+            if len(current_line) >= 6 or is_end:
+                grouped_lines.append(current_line)
+                current_line = []
+        if current_line:
+            grouped_lines.append(current_line)
+
+        for line_words in grouped_lines:
             try:
-                txt = TextClip(font=font_path, text=w["word"], font_size=int(H*0.06), color="yellow", stroke_color="black", stroke_width=2)  # noqa: E501
-                txt = txt.with_start(w["start"]).with_end(w["end"]).with_position(("center", int(H*0.75)))
+                text = " ".join(w["word"] for w in line_words)
+                start_time = line_words[0]["start"]
+                end_time = line_words[-1]["end"]
+                
+                txt = TextClip(
+                    font=font_path, text=text, font_size=int(H*0.06), 
+                    color="white", stroke_color="black", stroke_width=2,
+                    method="caption", size=(int(W*0.9), None)
+                )
+                
+                # Position near bottom with 5% margin
+                y_pos = int(H * 0.95) - (txt.h or int(H * 0.06))
+                txt = txt.with_start(start_time).with_end(end_time).with_position(("center", y_pos))
                 resources_to_close.append(txt)
                 clips.append(txt)
             except Exception as e:
-                logger.warning(f"Failed to render caption word {w['word']}: {type(e).__name__}")
+                logger.warning(f"Failed to render caption line '{text}': {type(e).__name__}")
 
         for p in timeline.get("popups", []):
             try:

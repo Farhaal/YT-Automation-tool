@@ -89,7 +89,7 @@ def test_scene_segmentation():
 
     print("\n--- P4 Comprehensive Tests Passed ---")
 
-def test_scene_segmentation_and_keywords():
+def test_scene_segmentation_and_keywords_fallback():
     mock_words = [
         {"word": "The", "start": 0.0, "end": 0.2},
         {"word": "ocean", "start": 0.2, "end": 0.5},
@@ -119,3 +119,37 @@ def test_scene_segmentation_and_keywords():
     assert scene_2["text"] == "It is home to millions of species."
     assert 1 <= len(scene_2["queries"]) <= 3
     assert all(len(q.strip()) > 0 for q in scene_2["queries"])
+
+def test_scene_segmentation_with_topic_llm(monkeypatch):
+    from backend.app.core.config import settings
+    
+    # Enable LLM
+    monkeypatch.setattr(settings, "LLM_API_KEY", "fake_key")
+    
+    calls = []
+    
+    def mock_call_llm_chat(messages, temperature=0.3):
+        # The first call is topic analysis
+        if temperature == 0.7:
+            calls.append("topic")
+            return "Test topic: Ocean life."
+        else:
+            calls.append("queries")
+            # Verify the topic is passed into the prompt
+            assert "The overall video topic is: Test topic: Ocean life." in messages[1]["content"]
+            return "underwater footage, sea life"
+
+    monkeypatch.setattr("backend.app.services.nlp._call_llm_chat", mock_call_llm_chat)
+    
+    mock_words = [
+        {"word": "The", "start": 0.0, "end": 0.2},
+        {"word": "ocean", "start": 0.2, "end": 0.5},
+        {"word": "is", "start": 0.5, "end": 0.8},
+        {"word": "deep.", "start": 0.8, "end": 1.0},
+    ]
+
+    scenes = process_script_to_scenes(mock_words)
+    
+    assert len(scenes) == 1
+    assert calls == ["topic", "queries"]
+    assert scenes[0]["queries"] == ["underwater footage", "sea life"]

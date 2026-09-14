@@ -5,14 +5,14 @@ import httpx
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import AssetProvider
+from backend.app.services.assets.base import USER_AGENT, AssetProvider
 
 
 class PexelsProvider(AssetProvider):
     def __init__(self):
         super().__init__("Pexels")
         self.api_key = settings.PEXELS_API_KEY
-        self.headers = {"Authorization": self.api_key} if self.api_key else {}
+        self.headers = {"Authorization": self.api_key, "User-Agent": USER_AGENT} if self.api_key else {"User-Agent": USER_AGENT}  # noqa: E501
         if not self.api_key:
             logger.info("Pexels API key not configured. Pexels will be disabled.")
         else:

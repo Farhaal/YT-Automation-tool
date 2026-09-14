@@ -104,14 +104,8 @@ def extract_keywords(text: str) -> List[str]:
             
     return all_candidates[:3] if all_candidates else [text.strip('.,;!?')]
 
-def extract_visual_queries_with_llm(text: str) -> List[str]:
-    """
-    Uses an optional LLM to generate visual search queries.
-    Expects an OpenAI-compatible /chat/completions endpoint.
-    """
-    prompt = f"Extract 1 to 3 short visual search queries for a stock footage site that best represent this scene: '{text}'. Return ONLY comma-separated queries, nothing else."  # noqa: E501
-    
-    # Determine base URL and auth
+def _call_llm_chat(messages: List[Dict], temperature: float = 0.3) -> str:
+    """Helper to send a chat completion request to the configured LLM."""
     provider = (settings.LLM_PROVIDER or "").lower()
     base_url = settings.LLM_BASE_URL
     model = settings.LLM_MODEL or "gpt-3.5-turbo"
@@ -134,23 +128,47 @@ def extract_visual_queries_with_llm(text: str) -> List[str]:
     if settings.LLM_API_KEY:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
         
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/chat/completions",
+        headers=headers,
+        json={
+            "model": model, 
+            "messages": messages,
+            "temperature": temperature
+        },
+        timeout=12.0
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
+
+def analyze_transcript_topic(full_text: str) -> str:
+    """
+    Uses the configured LLM to concisely describe the video's overall subject, setting, and visual world.
+    """
+    prompt = f"Analyze this transcript and describe its overall subject, setting, and visual world concisely (under 40 words).\nTranscript: {full_text}"  # noqa: E501
     try:
-        response = httpx.post(
-            f"{base_url.rstrip('/')}/chat/completions",
-            headers=headers,
-            json={
-                "model": model, 
-                "messages": [
-                    {"role": "system", "content": "You are a visual search query generator. Return only comma-separated queries."},  # noqa: E501
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3
-            },
-            timeout=8.0
-        )
-        response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
+        content = _call_llm_chat([{"role": "user", "content": prompt}], temperature=0.7)
+        return content.strip()
+    except Exception as e:
+        logger.warning(f"LLM topic analysis failed ({e}). Returning empty topic.")
+        return ""
+
+def extract_visual_queries_with_llm(text: str, topic_context: str = "") -> List[str]:
+    """
+    Uses an optional LLM to generate visual search queries, optionally guided by a transcript topic.
+    """
+    if topic_context:
+        prompt = f"The overall video topic is: {topic_context}. For this line, return 1-3 short, CONCRETE stock-footage search queries that fit BOTH the line AND the overall topic. Stay literal and on-topic; do NOT use metaphors or generic motivational imagery. Line: '{text}'. Return ONLY comma-separated queries, nothing else."  # noqa: E501
+    else:
+        prompt = f"Extract 1 to 3 short visual search queries for a stock footage site that best represent this scene: '{text}'. Return ONLY comma-separated queries, nothing else."  # noqa: E501
+    
+    try:
+        content = _call_llm_chat([
+            {"role": "system", "content": "You are a visual search query generator. Return only comma-separated queries."},  # noqa: E501
+            {"role": "user", "content": prompt}
+        ], temperature=0.3)
+        
         queries = [q.strip() for q in content.split(",") if q.strip()]
         return queries[:3] if queries else extract_keywords(text)
     except Exception as e:
@@ -165,9 +183,14 @@ def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]
     
     use_llm = bool(settings.LLM_API_KEY) or ((settings.LLM_PROVIDER or "").lower() == "ollama")
     
+    topic = ""
+    if use_llm:
+        full_text = " ".join(w["word"] for w in words).strip()
+        topic = analyze_transcript_topic(full_text)
+        
     for scene in scenes:
         if use_llm:
-            scene["queries"] = extract_visual_queries_with_llm(scene["text"])
+            scene["queries"] = extract_visual_queries_with_llm(scene["text"], topic_context=topic)
         else:
             scene["queries"] = extract_keywords(scene["text"])
             

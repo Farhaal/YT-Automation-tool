@@ -5,7 +5,7 @@ import httpx
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import AssetProvider
+from backend.app.services.assets.base import USER_AGENT, AssetProvider
 
 
 class PixabayProvider(AssetProvider):
@@ -29,6 +29,7 @@ class PixabayProvider(AssetProvider):
             # 1. Search Videos
             resp = httpx.get(
                 "https://pixabay.com/api/videos/",
+                headers={"User-Agent": USER_AGENT},
                 params={"key": self.api_key, "q": query, "orientation": px_orientation, "per_page": 5},
                 timeout=5.0
             )
@@ -60,6 +61,7 @@ class PixabayProvider(AssetProvider):
             # 2. Search Images
             resp = httpx.get(
                 "https://pixabay.com/api/",
+                headers={"User-Agent": USER_AGENT},
                 params={"key": self.api_key, "q": query, "orientation": px_orientation, "per_page": 5, "image_type": "photo"},  # noqa: E501
                 timeout=5.0
             )
