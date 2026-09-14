@@ -40,6 +40,7 @@ should be able to make a good video without paying a monthly fee.**
 - **GPU-accelerated** — uses an NVIDIA RTX card for fast transcription and encoding,
   with a CPU fallback for machines without one.
 - **Review & edit** — preview the draft result, swap any clip you don't like, and change settings in the local React editor.
+- **Export for Editors** — download an editable project zip with all assets, an SRT captions file, and an FCPXML project file to natively edit the timeline in CapCut, DaVinci Resolve, or Premiere Pro.
 
 ## How it works
 

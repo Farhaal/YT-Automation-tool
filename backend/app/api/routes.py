@@ -265,6 +265,25 @@ async def render_job(job_id: str, req: RenderRequest, background_tasks: Backgrou
     background_tasks.add_task(run_render_sync, job_id, req.draft_mode, loop)
     return {"status": "ok"}
 
+@router.post("/jobs/{job_id}/export")
+async def export_job(job_id: str):
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    timeline_path = job.get("timeline_path")
+    if not timeline_path or not Path(timeline_path).exists():
+        raise HTTPException(status_code=400, detail="Timeline not ready")
+        
+    from backend.app.services.exporter import export_project
+    try:
+        zip_path = export_project(Path(timeline_path), job_id)
+        # The frontend wants a path relative to the DATA dir or a relative URL for /media
+        # The /media endpoint expects the absolute path or a path relative to something.
+        # Actually, /media just takes `?path=<absolute_path>`
+        return {"export_path": str(zip_path.absolute())}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Settings API ---
 SETTINGS_PATH = DATA / "settings.json"
 
