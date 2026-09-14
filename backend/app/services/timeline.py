@@ -32,7 +32,7 @@ class TimelineAssembler:
             "attribution_text": asset_meta.get("attribution_text")
         }
 
-    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def assemble(self, audio_path: str, audio_duration: float, words: List[Dict[str, Any]], scenes: List[Dict[str, Any]], aspect_ratio: str = "landscape") -> Dict[str, Any]:
         timeline_scenes = []
         for i, scene in enumerate(scenes):
             asset_meta = scene.get("asset")
@@ -69,9 +69,15 @@ class TimelineAssembler:
                 "end": w["end"]
             })
             
+        width, height = 1920, 1080
+        if aspect_ratio == "portrait":
+            width, height = 1080, 1920
+        elif aspect_ratio == "square":
+            width, height = 1080, 1080
+            
         timeline = {
             "version": 1,
-            "resolution": {"width": 1080, "height": 1920, "fps": 30},
+            "resolution": {"width": width, "height": height, "fps": 30},
             "audio": {"path": str(audio_path), "duration": audio_duration},
             "scenes": timeline_scenes,
             "captions": captions,

@@ -74,7 +74,7 @@ describe('EditorView Interactions', () => {
     }
     (global as any).WebSocket = MockWS;
 
-    const { getByText, findByText, getByRole, getAllByRole } = render(<EditorView jobId="123" />);
+    const { getByText, findByText, getByRole, getAllByRole, getByPlaceholderText } = render(<EditorView jobId="123" />);
     
     // Check progressing state
     await waitFor(() => expect(getByText(/Generating Video/i)).toBeInTheDocument());
@@ -94,7 +94,7 @@ describe('EditorView Interactions', () => {
     
     // Add popup
     fireEvent.click(getByText(/\+ Add Popup Overlay/i));
-    await waitFor(() => expect(getByText(/Text Callout/i)).toBeInTheDocument());
+    await waitFor(() => expect(getByPlaceholderText(/Text Callout/i)).toBeInTheDocument());
     
     // Test motion dropdown
     const selects = getAllByRole('combobox');

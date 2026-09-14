@@ -64,7 +64,7 @@ def test_job_orchestration(monkeypatch):
         called_stages.append("segment")
         return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
 
-    def mock_assemble(*args):
+    def mock_assemble(*args, **kwargs):
         called_stages.append("assemble")
         return {"scenes": []}
 

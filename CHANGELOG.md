@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for selecting video aspect ratio (16:9 Landscape, 9:16 Portrait, 1:1 Square) in the frontend.
+- Backend timeline assembler now correctly defaults to 16:9 Landscape if not specified.
 - Initial project scaffolding, documentation, and development tooling.
 
 <!--
