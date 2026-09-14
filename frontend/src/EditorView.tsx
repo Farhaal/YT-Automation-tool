@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader, RefreshCw, AlertTriangle, ArrowLeftRight, Download, MonitorPlay, Terminal, Settings2 } from 'lucide-react';
 
 export default function EditorView({ jobId }: { jobId: string }) {
@@ -23,7 +23,7 @@ export default function EditorView({ jobId }: { jobId: string }) {
     
     const interval = setInterval(() => {
       fetch(`http://localhost:8000/jobs/${jobId}`).then(r => r.json()).then(data => {
-        setJob(prev => {
+        setJob((prev: any) => {
           if (data.status === 'COMPLETED' || data.status === 'ERROR') {
              clearInterval(interval);
           }
