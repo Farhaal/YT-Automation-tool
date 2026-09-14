@@ -41,6 +41,10 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         logger.info(f"Job {job_id} [{progress}%]: {stage}")
 
     try:
+        # Apply settings (including LLM settings) to current environment early
+        # so process_script_to_scenes can use the latest LLM_API_KEY.
+        apply_settings_to_env()
+        
         job = job_manager.get_job(job_id)
         audio_path = job.get("audio_path")
         script = job.get("script")
@@ -62,8 +66,6 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         update(70, "Finding assets")
         from backend.app.services.assets.manager import AssetManager
         
-        # Apply settings (including LLM settings) to current environment
-        apply_settings_to_env()
         s = load_settings()
         import os
         if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]

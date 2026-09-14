@@ -140,3 +140,44 @@ def test_timeline_immutability(monkeypatch, tmp_path):
         saved = json.load(f_read)
         assert saved["scenes"][0]["motion"] == "kenburns_in"
         assert saved["scenes"][0]["start"] == 0 
+
+def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
+    from backend.app.api.routes import SETTINGS_PATH
+    import json
+    
+    # Write a fake settings file with an LLM key
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump({"llm_api_key": "fake_llm_key_123"}, f)
+        
+    called = []
+    
+    def mock_synthesize(text): return DATA / "tmp" / "fake.wav"
+    def mock_transcribe(audio_path): return {"words": [{"word": "fake", "start": 0, "end": 1}]}
+    
+    def mock_segment(words):
+        # By the time this runs, settings should have the LLM API key
+        from backend.app.core.config import settings
+        assert settings.LLM_API_KEY == "fake_llm_key_123"
+        called.append("segment_with_settings_applied")
+        return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
+
+    def mock_assemble(*args, **kwargs): return {"scenes": []}
+    def mock_render(*args, **kwargs): return DATA / "renders" / "fake_render.mp4"
+
+    monkeypatch.setattr("backend.app.services.tts.synthesize", mock_synthesize)
+    monkeypatch.setattr("backend.app.api.routes.transcribe_audio", mock_transcribe)
+    # We monkeypatch ONLY segment_into_scenes / process_script_to_scenes so we can assert mid-flight
+    monkeypatch.setattr("backend.app.services.nlp.process_script_to_scenes", mock_segment)
+    monkeypatch.setattr("backend.app.services.timeline.TimelineAssembler.assemble", mock_assemble)
+    monkeypatch.setattr("backend.app.services.renderer.render_timeline", mock_render)
+    monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)
+    
+    # Ensure settings is cleared out first so we know it loaded from file
+    from backend.app.core.config import settings
+    settings.LLM_API_KEY = ""
+
+    # Trigger script flow
+    res = client.post("/generate/script", json={"script": "Test settings order"})
+    assert res.status_code == 200
+    
+    assert "segment_with_settings_applied" in called
