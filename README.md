@@ -51,8 +51,9 @@ flowchart LR
     C --> D[Split into scenes]
     D --> E[Find matching free footage]
     E --> F[Build synced timeline]
-    F --> G[Render draft: captions, transitions, effects, pop-ups]
-    G --> H[Preview in Editor]
+    F --> G[Review clips in Editor]
+    G --> H[Export Project zip]
+    G --> I[Optional: Render in-app preview]
 ```
 
 The heart of the tool is **word-level timing**: because every visual is anchored to when a word is actually spoken, sync is correct by construction.

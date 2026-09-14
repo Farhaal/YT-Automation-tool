@@ -69,15 +69,10 @@ def test_job_orchestration(monkeypatch):
         called_stages.append("assemble")
         return {"scenes": []}
 
-    def mock_render(*args, **kwargs):
-        called_stages.append("render")
-        return DATA / "renders" / "fake_render.mp4"
-
     monkeypatch.setattr("backend.app.services.tts.synthesize", mock_synthesize)
     monkeypatch.setattr("backend.app.api.routes.transcribe_audio", mock_transcribe)
     monkeypatch.setattr("backend.app.services.nlp.process_script_to_scenes", mock_segment)
     monkeypatch.setattr("backend.app.services.timeline.TimelineAssembler.assemble", mock_assemble)
-    monkeypatch.setattr("backend.app.services.renderer.render_timeline", mock_render)
     monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)  # noqa: E501
     
     # Trigger script flow
@@ -92,7 +87,7 @@ def test_job_orchestration(monkeypatch):
     assert job["status"] == "COMPLETED"
     
     # Verify Audio was synthesized FIRST, then transcribed
-    assert called_stages == ["synthesize", "transcribe", "segment", "assemble", "render"]
+    assert called_stages == ["synthesize", "transcribe", "segment", "assemble"]
 
 def test_timeline_immutability(monkeypatch, tmp_path):
     job_id = "test-job-immutable"
@@ -169,13 +164,11 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
             return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
 
         def mock_assemble(*args, **kwargs): return {"scenes": []}
-        def mock_render(*args, **kwargs): return DATA / "renders" / "fake_render.mp4"
 
         monkeypatch.setattr("backend.app.services.tts.synthesize", mock_synthesize)
         monkeypatch.setattr("backend.app.api.routes.transcribe_audio", mock_transcribe)
         monkeypatch.setattr("backend.app.services.nlp.process_script_to_scenes", mock_segment)
         monkeypatch.setattr("backend.app.services.timeline.TimelineAssembler.assemble", mock_assemble)
-        monkeypatch.setattr("backend.app.services.renderer.render_timeline", mock_render)
         monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)  # noqa: E501
         
         # Ensure settings is cleared out first so we know it loaded from file

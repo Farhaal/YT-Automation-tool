@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Implemented OpenTimelineIO (OTIO) integration to export the assembled timeline into native NLE formats. Supports generating target-specific `project.fcpxml` and `timeline.edl` for DaVinci Resolve and Premiere Pro, and structured media bundles for CapCut.
 - Enhanced the timeline exporter to output pre-cut, perfectly timed contiguous clips using `ffmpeg`. Editors (like CapCut) can now drop the clips sequentially into a timeline and they will automatically sync to the narration without manual trimming.
+- Made the in-app render fully optional. The generation pipeline now successfully completes without automatically rendering a draft video, significantly reducing waiting time. Users can review inline individual clip previews, then directly export their project or explicitly choose to render a preview.
 - Repositioned the Editor UI layout to emphasize the recommended "export-first" workflow. The fast draft preview is now the default in-app view, with "Export to Editor" serving as the primary hero action, while the slower in-app full render is demoted to a secondary alternative.
 - Added full 1080p final render functionality, exposed via the Editor UI, allowing users to switch between fast preview drafts and high-quality final outputs.
 - Vastly accelerated asset search speeds by capping queries per scene (max 2), processing fast-tier providers (Pexels, Pixabay) first and skipping slow-tier providers upon success, and issuing searches concurrently.

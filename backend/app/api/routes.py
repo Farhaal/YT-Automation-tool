@@ -95,11 +95,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         with open(timeline_path, "w", encoding="utf-8") as f:
             json.dump(timeline, f, indent=2)
             
-        update(90, "Rendering draft", log_msg="Rendering draft video file via FFmpeg (NVENC/CPU)...", timeline_path=str(timeline_path))
-        from backend.app.services.renderer import render_timeline
-        draft_video_path = render_timeline(timeline_path, draft_mode=True)
-        
-        update(100, "Done", log_msg="Video rendering completed successfully!", status="COMPLETED", draft_video_path=str(draft_video_path))
+        update(100, "Ready to edit", log_msg="Timeline assembled. Ready for review and export.", status="COMPLETED", timeline_path=str(timeline_path))
         
     except Exception as e:
         import traceback

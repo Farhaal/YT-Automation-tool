@@ -241,9 +241,9 @@ export default function EditorView({ jobId }: { jobId: string }) {
               className="w-full h-full object-contain"
             />
           ) : (
-            <div className="text-gray-600 flex flex-col items-center gap-2">
-              <MonitorPlay className="w-10 h-10 opacity-50" />
-              <span className="font-medium">Preview Unavailable</span>
+            <div className="text-muted-foreground flex flex-col items-center gap-2 p-6 text-center">
+              <MonitorPlay className="w-10 h-10 opacity-50 mb-2" />
+              <span className="font-medium text-sm">No preview rendered &mdash; review clips below, export to your editor, or render a preview.</span>
             </div>
           )}
           {isFinal && (
@@ -284,8 +284,8 @@ export default function EditorView({ jobId }: { jobId: string }) {
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-foreground tracking-tight">In-App Controls</h4>
             <div className="grid grid-cols-2 gap-3">
-              <Button onClick={saveTimeline} isLoading={loading} variant="secondary" className="w-full gap-2 text-xs">
-                <RefreshCw className="w-3.5 h-3.5" /> Update Preview
+              <Button onClick={saveTimeline} isLoading={loading} variant="secondary" className="w-full gap-2 text-xs text-balance">
+                <RefreshCw className="w-3.5 h-3.5" /> {currentVideo ? "Update Preview" : "Render Preview (needs GPU/CPU time)"}
               </Button>
               <div className="flex flex-col gap-1 w-full">
                 <Button onClick={renderFinal} isLoading={loading} variant="ghost" className="w-full gap-2 text-xs border border-border">
@@ -327,17 +327,34 @@ export default function EditorView({ jobId }: { jobId: string }) {
                 </p>
                 
                 {s.asset ? (
-                  <div className="bg-accent/50 border rounded-lg p-3 text-sm flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                      <span className="font-semibold text-foreground">{s.asset.source}</span>
-                      <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider px-1.5 py-0.5 bg-background rounded">{s.asset.type}</span>
+                  <div className="space-y-3">
+                    <div className="bg-black rounded-lg overflow-hidden border border-gray-800 aspect-video relative flex items-center justify-center">
+                      {s.asset.type === 'video' ? (
+                        <video 
+                          src={`http://localhost:8000/media?path=${encodeURIComponent(s.asset.path)}`} 
+                          controls 
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <img 
+                          src={`http://localhost:8000/media?path=${encodeURIComponent(s.asset.path)}`} 
+                          alt={`Scene ${idx + 1}`} 
+                          className="w-full h-full object-contain"
+                        />
+                      )}
                     </div>
-                    {s.asset.url && (
-                      <a href={s.asset.url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-medium text-xs">
-                        View Source
-                      </a>
-                    )}
+                    <div className="bg-accent/50 border rounded-lg p-3 text-sm flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                        <span className="font-semibold text-foreground">{s.asset.source}</span>
+                        <span className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider px-1.5 py-0.5 bg-background rounded">{s.asset.type}</span>
+                      </div>
+                      {s.asset.url && (
+                        <a href={s.asset.url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-medium text-xs">
+                          View Source
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/50 p-3 rounded-lg flex items-center gap-2 text-red-800 dark:text-red-400 text-sm font-medium">
