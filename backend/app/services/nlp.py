@@ -22,63 +22,71 @@ def _build_scene(words: List[Dict]) -> Dict:
         "words": words
     }
 
-def segment_into_scenes(words: List[Dict[str, Any]], max_duration: float = 6.0, pause_threshold: float = 0.8) -> List[Dict[str, Any]]:  # noqa: E501
+def segment_into_scenes(
+    words: List[Dict[str, Any]], 
+    max_duration: float = 3.5, 
+    min_duration: float = 1.2
+) -> List[Dict[str, Any]]:
     """
-    Groups words into logical scenes based on sentence boundaries and pauses.
-    Strictly enforces max_duration. Multi-word scenes will never exceed max_duration.
-    Single-word scenes may exceed it only if the word itself is longer than max_duration.
+    Groups words into logical scenes based on sentence/clause boundaries and pauses.
+    Enforces min_duration (except possibly the last scene) and max_duration.
     """
     if not words:
         return []
         
     scenes = []
-    current_scene = []
+    current_words = []
     
-    for word in words:
-        if not current_scene:
-            current_scene.append(word)
-            # A single word that is a sentence end
-            if any(word["word"].endswith(p) for p in ['.', '?', '!', '\n']):
-                scenes.append(_build_scene(current_scene))
-                current_scene = []
-            continue
-            
-        # 1. Check for pause boundary *before* adding the current word
-        gap = word["start"] - current_scene[-1]["end"]
-        if gap >= pause_threshold:
-            scenes.append(_build_scene(current_scene))
-            current_scene = []
-            
-        current_scene.append(word)
+    clause_punct = {",", ";", ":", "-"}
+    conjunctions = {"and", "but", "or", "so", "then", "while", "because"}
+    sentence_ends = {".", "?", "!", "\n"}
+    
+    def _make_scene(w_list: List[Dict[str, Any]], sid: int) -> Dict[str, Any]:
+        return {
+            "id": f"s{sid}",
+            "start": w_list[0]["start"],
+            "end": w_list[-1]["end"],
+            "text": " ".join(x["word"].strip() for x in w_list),
+            "_words": w_list
+        }
         
-        # 2. Enforce max_duration invariant iteratively
-        while len(current_scene) > 1 and (current_scene[-1]["end"] - current_scene[0]["start"]) > max_duration:
-            # Look for soft boundary in all but the last word
-            split_idx = -1
-            for j in range(len(current_scene)-2, -1, -1):
-                if any(current_scene[j]["word"].endswith(p) for p in [',', ';', ':', '-']):
-                    split_idx = j
-                    break
+    for i, w in enumerate(words):
+        current_words.append(w)
+        dur = current_words[-1]["end"] - current_words[0]["start"]
+        
+        is_last_word = (i == len(words) - 1)
+        if is_last_word:
+            break
             
-            if split_idx != -1:
-                # Split at soft boundary
-                left = current_scene[:split_idx+1]
-                scenes.append(_build_scene(left))
-                current_scene = current_scene[split_idx+1:]
-            else:
-                # No soft boundary, hard split right before the last added word
-                left = current_scene[:-1]
-                scenes.append(_build_scene(left))
-                current_scene = [current_scene[-1]]
-                
-        # 3. Check for sentence end *after* max_duration enforcement
-        if current_scene and any(current_scene[-1]["word"].endswith(p) for p in ['.', '?', '!', '\n']):
-            scenes.append(_build_scene(current_scene))
-            current_scene = []
+        next_w = words[i+1]
+        pause = (next_w["start"] - w["end"] > 0.5)
+        
+        word_clean = w["word"].strip().lower()
+        last_char = word_clean[-1] if word_clean else ""
+        bare_word = "".join(c for c in word_clean if c.isalnum())
+        
+        is_sentence_end = last_char in sentence_ends
+        is_clause = last_char in clause_punct or bare_word in conjunctions
+        is_max_dur = dur >= max_duration
+        
+        if dur >= min_duration and (is_sentence_end or is_clause or pause or is_max_dur):
+            scenes.append(_make_scene(current_words, len(scenes)+1))
+            current_words = []
             
-    # Final flush
-    if current_scene:
-        scenes.append(_build_scene(current_scene))
+    if current_words:
+        dur = current_words[-1]["end"] - current_words[0]["start"]
+        if scenes and dur < min_duration:
+            # Merge backward
+            last_scene = scenes.pop()
+            merged = last_scene["_words"] + current_words
+            scenes.append(_make_scene(merged, len(scenes)+1))
+        else:
+            scenes.append(_make_scene(current_words, len(scenes)+1))
+            
+    # Cleanup _words and format correctly
+    for idx, s in enumerate(scenes):
+        s["id"] = f"s{idx+1}"
+        s.pop("_words", None)
         
     return scenes
 
@@ -175,11 +183,18 @@ def extract_visual_queries_with_llm(text: str, topic_context: str = "") -> List[
         logger.warning(f"LLM extraction failed ({e}). Falling back to NLP extraction.")
         return extract_keywords(text)
 
-def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def process_script_to_scenes(words: List[Dict[str, Any]], pace: str = "balanced") -> List[Dict[str, Any]]:
     """
     End-to-end pipeline to convert timed words into scenes with visual queries.
     """
-    scenes = segment_into_scenes(words)
+    if pace == "dynamic":
+        max_d, min_d = 2.5, 1.2
+    elif pace == "relaxed":
+        max_d, min_d = 5.0, 1.2
+    else:
+        max_d, min_d = 3.5, 1.2
+        
+    scenes = segment_into_scenes(words, max_d, min_d)
     
     use_llm = bool(settings.LLM_API_KEY) or ((settings.LLM_PROVIDER or "").lower() == "ollama")
     

@@ -28,7 +28,7 @@ async def notify_job_update(job_id: str, data: dict):
         for ws in dead_ws:
             active_connections[job_id].remove(ws)
 
-def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True):  # noqa: E501
+def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True, pace: str = "balanced"):  # noqa: E501
     def sync_notify(job_id, data):
         try:
             asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
@@ -64,7 +64,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         
         update(40, "Segmenting scenes", log_msg="Analyzing transcript with NLP to segment scenes and extract visual search queries...")
         from backend.app.services.nlp import process_script_to_scenes
-        scenes = process_script_to_scenes(words)
+        scenes = process_script_to_scenes(words, pace=pace)
         
         update(60, "Finding assets", log_msg=f"Searching Pexels, Pixabay, Openverse, and Wikimedia for {len(scenes)} scenes...")
         from backend.app.services.assets.manager import AssetManager
@@ -108,6 +108,7 @@ class GenerateRequest(BaseModel):
     script: str = ""
     aspect_ratio: str = "landscape"
     enable_motion: bool = True
+    pace: str = "balanced"
 
 @router.get("/health")
 def health_check():
@@ -121,24 +122,23 @@ async def generate_from_script(req: GenerateRequest, background_tasks: Backgroun
     job_id = str(uuid.uuid4())
     job_manager.create_job(job_id, script=req.script)
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion, req.pace)
     return job_manager.get_job(job_id)
 
 from fastapi import Form  # noqa: E402
 
 
 @router.post("/generate/audio")
-async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True)):  # noqa: E501
+async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True), pace: str = Form("balanced")):  # noqa: E501
     import asyncio
     job_id = str(uuid.uuid4())
     temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
     temp_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(audio_file.file, buffer)
-        
+    with open(temp_path, "wb") as f:
+        f.write(await audio_file.read())
     job_manager.create_job(job_id, audio_path=str(temp_path))
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio, enable_motion)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio, enable_motion, pace)
     return job_manager.get_job(job_id)
 
 @router.get("/jobs/{job_id}")

@@ -41,6 +41,7 @@ should be able to make a good video without paying a monthly fee.**
   with a CPU fallback for machines without one.
 - **Review & edit** — preview the draft result, swap any clip you don't like, and change settings in the local React editor.
 - **Recommended Workflow** — the in-app render provides a fast, lightweight draft preview. For final edits, color correction, and best quality rendering, use the **Export for Editor** action to download a zip bundle. For Premiere/Resolve, it includes an FCPXML/EDL project. For CapCut, it includes all media pre-cut to exact durations—simply drop the clips in order onto your timeline and they will automatically match the narration sync perfectly. (In-app final rendering is still available as an optional, slower alternative).
+- **Dynamic Pace Control** — customize how dense your clips are using the "Pace" dropdown (Relaxed, Balanced, Dynamic). A dynamic pace maps clips to individual concepts and clauses rather than entire sentences for a more engaging, fast-paced video.
 
 ## How it works
 

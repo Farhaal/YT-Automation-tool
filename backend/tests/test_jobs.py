@@ -61,7 +61,7 @@ def test_job_orchestration(monkeypatch):
         assert str(audio_path).endswith("fake.wav")
         return {"words": [{"word": "fake", "start": 0, "end": 1}]}
         
-    def mock_segment(words):
+    def mock_segment(words, pace="balanced"):
         called_stages.append("segment")
         return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
 
@@ -157,7 +157,7 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
         def mock_synthesize(text): return DATA / "tmp" / "fake.wav"
         def mock_transcribe(audio_path): return {"words": [{"word": "fake", "start": 0, "end": 1}]}
         
-        def mock_segment(words):
+        def mock_segment(words, pace="balanced"):
             # By the time this runs, settings should have the LLM API key
             assert settings.LLM_API_KEY == "fake_llm_key_123"
             called.append("segment_with_settings_applied")
