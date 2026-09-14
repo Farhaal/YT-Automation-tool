@@ -15,9 +15,10 @@ class OpenverseProvider(AssetProvider):
         results = []
         try:
             resp = httpx.get(
-                "https://api.openverse.engineering/v1/images/",
+                "https://api.openverse.org/v1/images/",
                 params={"q": query, "page_size": 5},
-                timeout=5.0
+                timeout=5.0,
+                follow_redirects=True
             )
             if resp.status_code == 200:
                 data = resp.json()

@@ -22,7 +22,9 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setattr("backend.app.api.routes.DATA", tmp_path)
     monkeypatch.setattr("backend.app.services.job_manager.DATA", tmp_path)
 
-def test_settings_api():
+def test_settings_api(monkeypatch, tmp_path):
+    monkeypatch.setattr("backend.app.api.routes.SETTINGS_PATH", tmp_path / "settings.json")
+    
     # Verify keys are masked / only return status
     res = client.post("/settings", json={"pexels_key": "secret_abc", "pixabay_key": "secret_xyz"})
     assert res.status_code == 200

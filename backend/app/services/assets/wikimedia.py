@@ -28,7 +28,8 @@ class WikimediaProvider(AssetProvider):
                     "iiprop": "url|size|extmetadata",
                     "format": "json"
                 },
-                timeout=5.0
+                timeout=5.0,
+                follow_redirects=True
             )
             if resp.status_code == 200:
                 data = resp.json()
