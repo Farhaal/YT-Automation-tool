@@ -33,6 +33,8 @@ class OpenverseProvider(AssetProvider):
                         height=p.get("height", 0) or 0,
                         attribution_required=True,
                         attribution_text=p.get("attribution"),
+                        title=p.get("title"),
+                        tags=[t.get("name") for t in p.get("tags", []) if isinstance(t, dict)],
                         query=query
                     ))
         except Exception as e:

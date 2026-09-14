@@ -19,7 +19,8 @@ class WikimediaProvider(AssetProvider):
                     "generator": "search",
                     "gsrsearch": f"filetype:bitmap {query}",
                     "gsrnamespace": 6,
-                    "gsrlimit": 5,
+                    "gsrlimit": 10,
+                    "srsort": "relevance",
                     "prop": "imageinfo",
                     "iiprop": "url|size|extmetadata",
                     "format": "json"
@@ -29,11 +30,19 @@ class WikimediaProvider(AssetProvider):
             if resp.status_code == 200:
                 data = resp.json()
                 pages = data.get("query", {}).get("pages", {})
+                
+                query_tokens = set(re.findall(r'\w+', query.lower()))
+                
                 for page_id, page in pages.items():
                     info = page.get("imageinfo", [{}])[0]
                     if not info or "url" not in info:
                         continue
                     
+                    title = page.get("title", "Image")
+                    title_tokens = set(re.findall(r'\w+', title.lower()))
+                    if query_tokens and not query_tokens.intersection(title_tokens):
+                        continue
+                        
                     meta = info.get("extmetadata", {})
                     author = meta.get("Artist", {}).get("value", "unknown")
                     author = re.sub('<[^<]+>', '', author)
@@ -41,7 +50,6 @@ class WikimediaProvider(AssetProvider):
                     license_name = meta.get("LicenseShortName", {}).get("value", "unknown")
                     license_url = meta.get("LicenseUrl", {}).get("value")
                     desc_url = info.get("descriptionurl")
-                    title = page.get("title", "Image")
                     
                     attribution_text = f'"{title}" by {author} is licensed under {license_name}.'
                     if desc_url:

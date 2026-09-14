@@ -149,3 +149,10 @@ components and check the licensing notes in [`docs/`](docs/).
 Built on the work of the open-source community — Whisper, WhisperX, Piper, Kokoro,
 FFmpeg, MoviePy, spaCy, and the free media libraries at Pexels, Pixabay, Openverse, and
 Wikimedia Commons. Thank you to every creator who shares their work freely.
+
+## Asset Ranking & Providers
+OpenReel tries the providers in the following priority order:
+1. Pexels, Pixabay, Openverse (Primary searches)
+2. Wikimedia Commons (Fallback to fill gaps)
+
+Assets are scored dynamically and the most relevant is selected. **Relevance is the strict highest priority:** we calculate token-overlap between the scene's search queries and the asset's tags, title, and description. Any asset with zero keyword overlap is heavily penalized. Tie-breakers fall back to query priority, video vs. image preference, resolution, orientation match, and duration.

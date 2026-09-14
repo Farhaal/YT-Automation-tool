@@ -21,8 +21,24 @@ class AssetManager:
         self.cache_dir = cache_dir or (DATA / "assets")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float) -> List[AssetMetadata]:
+    def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float, scene_query: str = "") -> List[AssetMetadata]:
+        import re
+        
+        query_tokens = set(re.findall(r'\w+', scene_query.lower()))
+        
         def score(a: AssetMetadata) -> tuple:
+            # 0. Relevance Score (higher is better)
+            # Compare scene query tokens against asset fields
+            asset_text = " ".join([
+                a.title or "",
+                a.description or "",
+                a.query or "",
+                " ".join(a.tags or [])
+            ]).lower()
+            asset_tokens = set(re.findall(r'\w+', asset_text))
+            
+            pri_relevance = len(query_tokens.intersection(asset_tokens)) if query_tokens else 1
+            
             # 1. Query priority (lower index is better, use negative to sort descending properly)
             pri_query = -a.query_priority
             
@@ -59,7 +75,11 @@ class AssetManager:
             # 7. Attribution preference
             pri_attr = 1 if not a.attribution_required else 0
             
-            return (pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
+            # If zero overlap, rank it absolutely last by negating the relevance score or putting a huge penalty
+            if pri_relevance == 0:
+                return (-1, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
+                
+            return (pri_relevance, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
 
         # Filter out used assets by composite asset_key
         unused = [a for a in assets if a.asset_key not in self.used_asset_keys]
@@ -78,8 +98,15 @@ class AssetManager:
             candidates = []
             seen_keys = set()
             
+            # Combine all queries for the scene to evaluate total relevance later
+            full_scene_query = " ".join(queries)
+            
             for query_idx, query in enumerate(queries):
                 for provider in self.providers:
+                    # Skip Wikimedia if we already have candidates from primary providers
+                    if provider.name == "Wikimedia" and len(candidates) > 0:
+                        continue
+                        
                     res = provider.search(query, orientation=orientation)
                     for pos_idx, a in enumerate(res):
                         a.query = query
@@ -96,7 +123,7 @@ class AssetManager:
                 if len(candidates) > 50:
                     break
                     
-            ranked = self.rank_assets(candidates, orientation, scene_duration)
+            ranked = self.rank_assets(candidates, orientation, scene_duration, full_scene_query)
             
             best_asset = None
             backup_asset = None
