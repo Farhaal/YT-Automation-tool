@@ -40,7 +40,7 @@ should be able to make a good video without paying a monthly fee.**
 - **GPU-accelerated** — uses an NVIDIA RTX card for fast transcription and encoding,
   with a CPU fallback for machines without one.
 - **Review & edit** — preview the draft result, swap any clip you don't like, and change settings in the local React editor.
-- **Export for Editors** — download an editable project zip with all assets, an SRT captions file, and an FCPXML/EDL project file (via OpenTimelineIO) to natively edit the timeline in CapCut, DaVinci Resolve, or Premiere Pro.
+- **Recommended Workflow** — the in-app render provides a fast, lightweight draft preview. For final edits, color correction, and best quality rendering, use the **Export for Editor** action to download a zip bundle (with all assets, SRT captions, and an FCPXML/EDL project) to natively finish the timeline in CapCut, DaVinci Resolve, or Premiere Pro. (In-app final rendering is still available as an optional, slower alternative).
 
 ## How it works
 

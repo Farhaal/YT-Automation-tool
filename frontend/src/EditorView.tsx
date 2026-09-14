@@ -227,6 +227,12 @@ export default function EditorView({ jobId }: { jobId: string }) {
       {/* --- Player Pane --- */}
       <div className="lg:col-span-5 flex flex-col gap-6 sticky top-8">
         
+        <div className="space-y-1.5 px-1">
+          <p className="text-sm font-medium text-foreground">
+            Preview your video below. For final edits and best quality, export to your editor. You can also render a finished video here (slower).
+          </p>
+        </div>
+
         <div className={`w-full bg-black rounded-xl overflow-hidden shadow-xl border border-gray-800 ${aspectClass} relative flex items-center justify-center`}>
           {currentVideo ? (
             <video 
@@ -247,32 +253,46 @@ export default function EditorView({ jobId }: { jobId: string }) {
           )}
           {!isFinal && currentVideo && (
             <div className="absolute top-4 right-4">
-              <Badge variant="warning">Draft Preview</Badge>
+              <Badge variant="warning">Draft Preview (Low Quality)</Badge>
             </div>
           )}
         </div>
         
-        <Card className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Button onClick={saveTimeline} isLoading={loading} variant="secondary" className="w-full gap-2">
-              <RefreshCw className="w-4 h-4" /> Re-render Draft
-            </Button>
-            <Button onClick={renderFinal} isLoading={loading} variant="primary" className="w-full gap-2">
-              <Sparkles className="w-4 h-4" /> Render Final
-            </Button>
-            <div className="col-span-2 flex items-center gap-2 mt-2">
+        <Card className="p-5 space-y-5">
+          {/* Export Action (Hero) */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-foreground tracking-tight">Recommended Workflow</h4>
+            <div className="flex items-center gap-2">
               <select 
                 value={exportTarget}
                 onChange={e => setExportTarget(e.target.value)}
-                className="rounded-lg border border-input bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring"
+                className="rounded-lg border border-input bg-background px-3 h-10 text-sm outline-none focus:ring-2 focus:ring-ring font-medium"
               >
                 <option value="resolve">DaVinci Resolve</option>
                 <option value="premiere">Premiere Pro</option>
                 <option value="capcut">CapCut</option>
               </select>
-              <Button onClick={exportProject} isLoading={exporting} variant="ghost" className="flex-1 gap-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-900">
-                <Download className="w-4 h-4" /> Export for Editor
+              <Button onClick={exportProject} isLoading={exporting} variant="primary" className="flex-1 gap-2 shadow-md">
+                <Download className="w-4 h-4" /> Export to Editor
               </Button>
+            </div>
+          </div>
+          
+          <hr className="border-border" />
+
+          {/* In-app actions */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-foreground tracking-tight">In-App Controls</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <Button onClick={saveTimeline} isLoading={loading} variant="secondary" className="w-full gap-2 text-xs">
+                <RefreshCw className="w-3.5 h-3.5" /> Update Preview
+              </Button>
+              <div className="flex flex-col gap-1 w-full">
+                <Button onClick={renderFinal} isLoading={loading} variant="ghost" className="w-full gap-2 text-xs border border-border">
+                  <Sparkles className="w-3.5 h-3.5" /> Render Final Here (slower)
+                </Button>
+                <span className="text-[10px] text-muted-foreground text-center leading-tight">Optional. Uses your local machine.</span>
+              </div>
             </div>
           </div>
         </Card>
