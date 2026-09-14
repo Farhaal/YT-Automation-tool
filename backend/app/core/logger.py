@@ -1,4 +1,5 @@
 import logging
+
 from rich.logging import RichHandler
 
 # Set up standard logging to use rich

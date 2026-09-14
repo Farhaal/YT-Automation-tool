@@ -1,5 +1,7 @@
 import subprocess
+
 from backend.app.core.logger import logger
+
 
 def run_startup_checks():
     logger.info("Starting OpenReel environment checks...")

@@ -1,7 +1,6 @@
-import sys
-import os
 import subprocess
-from pathlib import Path
+import sys
+
 
 def print_status(name, status, details=""):
     color = "\033[92m" if status else "\033[91m"
@@ -44,18 +43,19 @@ def main():
         res = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
         if res.returncode == 0:
             ffmpeg_ok = True
-            first_line = res.stdout.split('\n')[0]
             # Check for nvenc
             nvenc_check = subprocess.run(["ffmpeg", "-encoders"], capture_output=True, text=True, check=False)
-            has_nvenc = "nvenc" in nvenc_check.stdout.lower()
-            ffmpeg_details = f"(Found system ffmpeg. NVENC: {has_nvenc})"
-    except FileNotFoundError:
-        # Check imageio-ffmpeg bundled
+            if "nvenc" in nvenc_check.stdout:
+                ffmpeg_details = "(Found NVENC support)"
+    except Exception:
+        pass
+        
+    if not ffmpeg_ok:
         try:
             import imageio_ffmpeg
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            _ = imageio_ffmpeg.get_ffmpeg_exe()
             ffmpeg_ok = True
-            ffmpeg_details = f"(Found bundled imageio-ffmpeg)"
+            ffmpeg_details = "(Found bundled imageio-ffmpeg)"
         except (ImportError, Exception):
             pass
             

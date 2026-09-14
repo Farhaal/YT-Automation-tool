@@ -1,13 +1,13 @@
-import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from backend.app.core.paths import DATA
-from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
+from backend.app.services.assets.openverse import OpenverseProvider
 from backend.app.services.assets.pexels import PexelsProvider
 from backend.app.services.assets.pixabay import PixabayProvider
-from backend.app.services.assets.openverse import OpenverseProvider
 from backend.app.services.assets.wikimedia import WikimediaProvider
+
 
 class AssetManager:
     def __init__(self, cache_dir: Optional[Path] = None):
@@ -21,7 +21,7 @@ class AssetManager:
         self.cache_dir = cache_dir or (DATA / "assets")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float, scene_query: str = "") -> List[AssetMetadata]:
+    def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float, scene_query: str = "") -> List[AssetMetadata]:  # noqa: E501
         import re
         
         query_tokens = set(re.findall(r'\w+', scene_query.lower()))
@@ -88,7 +88,7 @@ class AssetManager:
             
         return sorted(unused, key=score, reverse=True)
 
-    def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape") -> List[Dict[str, Any]]:
+    def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape") -> List[Dict[str, Any]]:  # noqa: E501
         for scene in scenes:
             queries = scene.get("queries", [])
             if not queries:

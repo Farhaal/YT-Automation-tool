@@ -1,11 +1,14 @@
 import json
-import uuid
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Optional
-from moviepy import VideoFileClip, ImageClip, ColorClip, TextClip, CompositeVideoClip, AudioFileClip, vfx
-from backend.app.core.paths import DATA
+
+from moviepy import AudioFileClip, ColorClip, CompositeVideoClip, ImageClip, TextClip, VideoFileClip, vfx
+
 from backend.app.core.logger import logger
+from backend.app.core.paths import DATA
+
 
 def has_nvenc() -> bool:
     try:
@@ -15,9 +18,10 @@ def has_nvenc() -> bool:
         return False
 
 def _get_font_path():
-    import os, sys
-    if os.name == 'nt': return "C:/Windows/Fonts/arial.ttf"
-    elif sys.platform == 'darwin': return "/Library/Fonts/Arial.ttf"
+    import os
+    import sys
+    if os.name == 'nt': return "C:/Windows/Fonts/arial.ttf"  # noqa: E701
+    elif sys.platform == 'darwin': return "/Library/Fonts/Arial.ttf"  # noqa: E701
     return "DejaVuSans"
 
 def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: bool):
@@ -46,7 +50,7 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
         
         def create_fallback(dur, text):
             bg = ColorClip(size=(W, H), color=(40, 40, 40)).with_duration(dur)
-            txt = TextClip(font=font_path, text=text, font_size=int(H*0.05), color="white").with_position("center").with_duration(dur)
+            txt = TextClip(font=font_path, text=text, font_size=int(H*0.05), color="white").with_position("center").with_duration(dur)  # noqa: E501
             resources_to_close.extend([bg, txt])
             c = CompositeVideoClip([bg, txt], size=(W, H)).with_duration(dur)
             resources_to_close.append(c)
@@ -83,7 +87,7 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
                     if motion == "kenburns_in":
                         clip = clip.with_effects([vfx.Resize(lambda t: 1.0 + 0.05 * (t / max(dur, 0.1)))])
                     elif motion == "kenburns_out":
-                        clip = clip.resized(1.05).with_effects([vfx.Resize(lambda t: 1.0 - 0.0476 * (t / max(dur, 0.1)))])
+                        clip = clip.resized(1.05).with_effects([vfx.Resize(lambda t: 1.0 - 0.0476 * (t / max(dur, 0.1)))])  # noqa: E501
                         
                 except Exception as e:
                     logger.warning(f"Failed to load asset {apath} ({type(e).__name__}). Using fallback.")
@@ -108,7 +112,7 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
             
         for w in timeline.get("captions", []):
             try:
-                txt = TextClip(font=font_path, text=w["word"], font_size=int(H*0.06), color="yellow", stroke_color="black", stroke_width=2)
+                txt = TextClip(font=font_path, text=w["word"], font_size=int(H*0.06), color="yellow", stroke_color="black", stroke_width=2)  # noqa: E501
                 txt = txt.with_start(w["start"]).with_end(w["end"]).with_position(("center", int(H*0.75)))
                 resources_to_close.append(txt)
                 clips.append(txt)
@@ -129,7 +133,7 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
                     resources_to_close.append(pop)
                 elif p["type"] == "shape":
                     color = p.get("color", "red")
-                    c_map = {"red": (255,0,0), "green": (0,255,0), "blue": (0,0,255), "white": (255,255,255), "black": (0,0,0)}
+                    c_map = {"red": (255,0,0), "green": (0,255,0), "blue": (0,0,255), "white": (255,255,255), "black": (0,0,0)}  # noqa: E501
                     rgb = c_map.get(color.lower(), (255,0,0))
                     size = p.get("size", 200)
                     pop = ColorClip(size=(size, size), color=rgb).with_duration(p["duration"]).with_start(p["at"])
@@ -137,11 +141,11 @@ def _run_render_pass(timeline: dict, codec: str, out_path: Path, draft_mode: boo
 
                 if pop:
                     pos = p.get("position", "center")
-                    if pos == "top": pos_tuple = ("center", "top")
-                    elif pos == "bottom": pos_tuple = ("center", "bottom")
-                    elif pos == "left": pos_tuple = ("left", "center")
-                    elif pos == "right": pos_tuple = ("right", "center")
-                    else: pos_tuple = ("center", "center")
+                    if pos == "top": pos_tuple = ("center", "top")  # noqa: E701
+                    elif pos == "bottom": pos_tuple = ("center", "bottom")  # noqa: E701
+                    elif pos == "left": pos_tuple = ("left", "center")  # noqa: E701
+                    elif pos == "right": pos_tuple = ("right", "center")  # noqa: E701
+                    else: pos_tuple = ("center", "center")  # noqa: E701
                     pop = pop.with_position(pos_tuple)
                     
                     anim = p.get("animation", "none")

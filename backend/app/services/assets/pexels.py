@@ -1,9 +1,12 @@
-import httpx
 from typing import List
+
+import httpx
+
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
 from backend.app.services.assets.base import AssetProvider
+
 
 class PexelsProvider(AssetProvider):
     def __init__(self):
@@ -32,7 +35,7 @@ class PexelsProvider(AssetProvider):
                 data = resp.json()
                 for v in data.get("videos", []):
                     video_files = v.get("video_files", [])
-                    if not video_files: continue
+                    if not video_files: continue  # noqa: E701
                     best_file = max(video_files, key=lambda f: f.get("width", 0) * f.get("height", 0))
                     
                     results.append(AssetMetadata(

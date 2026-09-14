@@ -1,13 +1,15 @@
 # IMPORTANT: Import paths FIRST to set up data containment before any ML libraries load
-import backend.app.core.paths
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+import backend.app.core.paths  # noqa: F401
+from backend.app.api.routes import router
 from backend.app.core.config import settings
 from backend.app.core.logger import logger
 from backend.app.services.startup_check import run_startup_checks
-from backend.app.api.routes import router
 
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,7 +24,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],

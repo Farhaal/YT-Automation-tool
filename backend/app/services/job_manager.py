@@ -1,9 +1,8 @@
 import json
-import asyncio
-from typing import Dict, Any, Optional
-from pathlib import Path
+from typing import Any, Dict, Optional
+
 from backend.app.core.paths import DATA
-from backend.app.core.logger import logger
+
 
 class JobManager:
     def __init__(self):

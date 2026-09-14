@@ -1,9 +1,11 @@
-import os
 import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from backend.app.services.assets.manager import AssetManager
+
 
 @pytest.fixture
 def mock_httpx():
@@ -42,10 +44,14 @@ def test_asset_manager_comprehensive(mock_httpx):
             query = kwargs["params"]["gsrsearch"].replace("filetype:bitmap ", "")
             
         if "no_results" in query:
-            if "pexels" in url: mock_resp.json.return_value = {"videos": [], "photos": []}
-            elif "pixabay" in url: mock_resp.json.return_value = {"hits": []}
-            elif "openverse" in url: mock_resp.json.return_value = {"results": []}
-            elif "wikimedia" in url: mock_resp.json.return_value = {"query": {"pages": {}}}
+            if "pexels" in url:
+                mock_resp.json.return_value = {"videos": [], "photos": []}
+            elif "pixabay" in url:
+                mock_resp.json.return_value = {"hits": []}
+            elif "openverse" in url:
+                mock_resp.json.return_value = {"results": []}
+            elif "wikimedia" in url:
+                mock_resp.json.return_value = {"query": {"pages": {}}}
             return mock_resp
         
         if "network_fail" in query:
@@ -203,7 +209,7 @@ def test_asset_manager_comprehensive(mock_httpx):
         pixabay_hash = hashlib.md5("Pixabay:primary_vid".encode()).hexdigest()
         assert not (temp_path / f"{pixabay_hash}.mp4").exists(), "Partial download file was not cleaned up!"
         
-        # So backup becomes Openverse:ov_img (Query 0, score 1000) which beats Pexels:secondary_vid (Query 1, score 995).
+        # So backup becomes Openverse:ov_img (Query 0, score 1000) which beats Pexels:secondary_vid (Query 1, score 995).  # noqa: E501
         # This explicitly proves the "relevance-first" ranking policy!
         backup = s1.get("backup_asset")
         assert backup is not None
@@ -228,7 +234,7 @@ def test_asset_manager_comprehensive(mock_httpx):
             assert "local_path" in meta
             assert meta["local_path"] is not None
         
-        # Openverse & Wikimedia parsing validation (they are generated, verify they exist in manager's tracking if we specifically test them)
+        # Openverse & Wikimedia parsing validation (they are generated, verify they exist in manager's tracking if we specifically test them)  # noqa: E501
         ov_res = manager.providers[2].search("primary")
         assert len(ov_res) == 1
         ov = ov_res[0]
@@ -255,11 +261,11 @@ def test_asset_manager_comprehensive(mock_httpx):
             print(f"Scene: [{s['start']:.2f}s - {s['end']:.2f}s] Queries: {s['queries']}")
             if s.get("asset"):
                 a = s["asset"]
-                print(f"  Selected: {a['asset_key']} ({a['media_type']}) - {a['width']}x{a['height']} (Query: {a['query']})")
+                print(f"  Selected: {a['asset_key']} ({a['media_type']}) - {a['width']}x{a['height']} (Query: {a['query']})")  # noqa: E501
                 print(f"  Source: {a['source_page_url']} | Author: {a['author']}")
             if s.get("backup_asset"):
                 b = s["backup_asset"]
-                print(f"  Backup: {b['asset_key']} ({b['media_type']}) - {b['width']}x{b['height']} (Query: {b['query']})")
+                print(f"  Backup: {b['asset_key']} ({b['media_type']}) - {b['width']}x{b['height']} (Query: {b['query']})")  # noqa: E501
         print("------------------------")
 
 def test_missing_keys_fallback(mock_httpx):
@@ -327,6 +333,7 @@ def test_lexicographic_ranking_regression():
 def test_asset_relevance_ranking():
     import tempfile
     from pathlib import Path
+
     from backend.app.services.assets import AssetMetadata
     from backend.app.services.assets.manager import AssetManager
 

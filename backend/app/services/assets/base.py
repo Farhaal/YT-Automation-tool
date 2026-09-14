@@ -1,9 +1,11 @@
 import hashlib
-from typing import List, Optional
-from pathlib import Path
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import List, Optional
+
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
+
 
 class AssetProvider(ABC):
     def __init__(self, name: str):

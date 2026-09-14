@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed timing issue where LLM API keys saved in settings were not applied before scene segmentation, causing NLP to fall back to YAKE on a fresh backend process.
+- Fixed GitHub Actions CI by correctly provisioning FFmpeg and spaCy models in the test runner.
+- Fixed codebase linting errors and added strict, non-pedantic Ruff formatting configuration.
 
 ### Changed
 - Improved asset search: Assets are now strictly prioritized by keyword relevance (token overlap with search query), ensuring highly accurate media selection. This relies on dynamically parsed descriptive tags from Pixabay and alt-text from Pexels.
