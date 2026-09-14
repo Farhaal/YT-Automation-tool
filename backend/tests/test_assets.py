@@ -394,3 +394,50 @@ def test_asset_relevance_ranking():
         assert ranked[1].asset_key == "Pixabay:3"
         assert ranked[2].asset_key == "Pexels:2"
 
+def test_pixabay_tags_relevance_ranking(tmp_path):
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.manager import AssetManager
+
+    manager = AssetManager(cache_dir=tmp_path)
+    scene_query = "futuristic city cyberpunk neon"
+    
+    # Candidate 1: High quality Pixabay asset, but tags DO NOT match the scene query
+    # (Maybe the fallback query "city" got us here, but we want a better match)
+    asset_high_quality_no_overlap = AssetMetadata(
+        provider="Pixabay",
+        provider_asset_id="1",
+        asset_key="Pixabay:1",
+        media_url="http://vid1",
+        media_type="video",
+        width=3840,
+        height=2160, # 4k
+        duration=15.0,
+        tags=["modern", "architecture", "urban"], # No overlap with scene_query
+        query="city",
+        query_priority=0,
+        result_position=0
+    )
+    
+    # Candidate 2: Lower quality Pixabay asset, but tags DO match the scene query
+    asset_lower_quality_overlap = AssetMetadata(
+        provider="Pixabay",
+        provider_asset_id="2",
+        asset_key="Pixabay:2",
+        media_url="http://vid2",
+        media_type="video",
+        width=1920,
+        height=1080, # 1080p
+        duration=10.0,
+        tags=["futuristic", "cyberpunk", "cityscape"], # "futuristic", "cyberpunk" overlaps
+        query="city",
+        query_priority=0,
+        result_position=1
+    )
+    
+    assets = [asset_high_quality_no_overlap, asset_lower_quality_overlap]
+    ranked = manager.rank_assets(assets, orientation="landscape", scene_duration=5.0, scene_query=scene_query)
+    
+    # The one with overlap MUST rank first!
+    assert ranked[0].asset_key == "Pixabay:2"
+    assert ranked[1].asset_key == "Pixabay:1"
+

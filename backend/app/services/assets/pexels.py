@@ -75,6 +75,7 @@ class PexelsProvider(AssetProvider):
                         width=p.get("width", 0),
                         height=p.get("height", 0),
                         attribution_required=False,
+                        title=p.get("alt") or None,
                         query=query
                     ))
         except Exception as e:

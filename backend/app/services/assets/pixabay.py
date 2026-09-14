@@ -50,6 +50,7 @@ class PixabayProvider(AssetProvider):
                         height=best_file.get("height", 0),
                         duration=v.get("duration", 0.0),
                         attribution_required=False,
+                        tags=[t.strip() for t in v.get("tags", "").split(",") if t.strip()],
                         query=query
                     ))
             
@@ -75,6 +76,7 @@ class PixabayProvider(AssetProvider):
                         width=p.get("imageWidth", 0),
                         height=p.get("imageHeight", 0),
                         attribution_required=False,
+                        tags=[t.strip() for t in p.get("tags", "").split(",") if t.strip()],
                         query=query
                     ))
         except Exception as e:

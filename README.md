@@ -155,4 +155,4 @@ OpenReel tries the providers in the following priority order:
 1. Pexels, Pixabay, Openverse (Primary searches)
 2. Wikimedia Commons (Fallback to fill gaps)
 
-Assets are scored dynamically and the most relevant is selected. **Relevance is the strict highest priority:** we calculate token-overlap between the scene's search queries and the asset's tags, title, and description. Any asset with zero keyword overlap is heavily penalized. Tie-breakers fall back to query priority, video vs. image preference, resolution, orientation match, and duration.
+Assets are scored dynamically and the most relevant is selected. **Relevance is the strict highest priority:** we calculate token-overlap between the scene's search queries and the asset's text metadata (including Pixabay's tags, Pexels' alt-text, and Openverse's titles). Any asset with zero keyword overlap is heavily penalized. Tie-breakers fall back to query priority, video vs. image preference, resolution, orientation match, and duration.

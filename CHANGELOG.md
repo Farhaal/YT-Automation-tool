@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed timing issue where LLM API keys saved in settings were not applied before scene segmentation, causing NLP to fall back to YAKE on a fresh backend process.
 
 ### Changed
-- Improved asset search: Assets are now strictly prioritized by keyword relevance (token overlap with search query), ensuring highly accurate media selection.
+- Improved asset search: Assets are now strictly prioritized by keyword relevance (token overlap with search query), ensuring highly accurate media selection. This relies on dynamically parsed descriptive tags from Pixabay and alt-text from Pexels.
 - Wikimedia Commons is now treated exclusively as a fallback provider for unfilled gaps to improve quality and speed, and its search queries now utilize relevance sorting.
 
 ### Added
