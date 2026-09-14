@@ -112,6 +112,9 @@ npm run dev
 Pexels and Pixabay require free API keys. These are completely optional, user-owned keys configured locally in the app's Settings page (they are never committed or uploaded).
 Openverse and Wikimedia Commons do not require any API keys and will work out-of-the-box.
 
+### Optional AI Model Key
+For smarter visual search query extraction, you can optionally provide an LLM API key (OpenAI, OpenRouter, Groq, or local Ollama) in the Settings page. This will analyze the script context to generate better search queries. If you don't provide a key, OpenReel falls back to a fast, built-in NLP keyword extractor (spaCy + YAKE). Your API keys are kept strictly local.
+
 ## Performance & Model Size
 
 OpenReel is designed to be configurable for a balance of speed and quality:

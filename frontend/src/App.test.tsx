@@ -17,7 +17,7 @@ describe('Frontend Component Tests', () => {
 
   it('SettingsView handles provider status properly and masks inputs', () => {
     const { getByPlaceholderText, getByText } = render(<SettingsView />);
-    expect(getByText(/Provider Settings/i)).toBeInTheDocument();
+    expect(getByText(/Stock Media Providers/i)).toBeInTheDocument();
     
     // Inputs should be password fields to mask keys
     const pexelsInput = getByPlaceholderText(/Enter Pexels Key/i) as HTMLInputElement;

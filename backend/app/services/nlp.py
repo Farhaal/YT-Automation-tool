@@ -104,26 +104,55 @@ def extract_keywords(text: str) -> List[str]:
 
 def extract_visual_queries_with_llm(text: str) -> List[str]:
     """
-    Uses a local LLM via Ollama to generate visual search queries.
+    Uses an optional LLM to generate visual search queries.
+    Expects an OpenAI-compatible /chat/completions endpoint.
     """
     prompt = f"Extract 1 to 3 short visual search queries for a stock footage site that best represent this scene: '{text}'. Return ONLY comma-separated queries, nothing else."
     
+    # Determine base URL and auth
+    provider = (settings.LLM_PROVIDER or "").lower()
+    base_url = settings.LLM_BASE_URL
+    model = settings.LLM_MODEL or "gpt-3.5-turbo"
+    
+    if not base_url:
+        if provider == "openai":
+            base_url = "https://api.openai.com/v1"
+        elif provider == "groq":
+            base_url = "https://api.groq.com/openai/v1"
+            model = settings.LLM_MODEL or "llama3-8b-8192"
+        elif provider == "openrouter":
+            base_url = "https://openrouter.ai/api/v1"
+        elif provider == "ollama" or settings.USE_OLLAMA:
+            base_url = f"{settings.OLLAMA_URL.rstrip('/')}/v1"
+            model = settings.LLM_MODEL or "llama3"
+        else:
+            base_url = "https://api.openai.com/v1"
+
+    headers = {"Content-Type": "application/json"}
+    if settings.LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+        
     try:
         response = httpx.post(
-            f"{settings.OLLAMA_URL}/api/generate",
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers=headers,
             json={
-                "model": "llama3", 
-                "prompt": prompt,
-                "stream": False
+                "model": model, 
+                "messages": [
+                    {"role": "system", "content": "You are a visual search query generator. Return only comma-separated queries."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3
             },
-            timeout=5.0
+            timeout=8.0
         )
         response.raise_for_status()
         data = response.json()
-        queries = [q.strip() for q in data.get("response", "").split(",") if q.strip()]
+        content = data["choices"][0]["message"]["content"]
+        queries = [q.strip() for q in content.split(",") if q.strip()]
         return queries[:3] if queries else extract_keywords(text)
     except Exception as e:
-        logger.warning(f"Ollama extraction failed ({e}). Falling back to NLP extraction.")
+        logger.warning(f"LLM extraction failed ({e}). Falling back to NLP extraction.")
         return extract_keywords(text)
 
 def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -132,8 +161,10 @@ def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]
     """
     scenes = segment_into_scenes(words)
     
+    use_llm = bool(settings.LLM_API_KEY) or ((settings.LLM_PROVIDER or "").lower() == "ollama") or settings.USE_OLLAMA
+    
     for scene in scenes:
-        if settings.USE_OLLAMA:
+        if use_llm:
             scene["queries"] = extract_visual_queries_with_llm(scene["text"])
         else:
             scene["queries"] = extract_keywords(scene["text"])

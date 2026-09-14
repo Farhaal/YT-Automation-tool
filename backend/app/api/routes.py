@@ -5,7 +5,7 @@ import shutil
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from backend.app.core.paths import DATA
 from backend.app.services.transcription import transcribe_audio
@@ -62,7 +62,8 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         update(70, "Finding assets")
         from backend.app.services.assets.manager import AssetManager
         
-        # Load API keys from settings if they exist
+        # Apply settings (including LLM settings) to current environment
+        apply_settings_to_env()
         s = load_settings()
         import os
         if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]
@@ -265,15 +266,37 @@ SETTINGS_PATH = DATA / "settings.json"
 class SettingsUpdate(BaseModel):
     pexels_key: str = ""
     pixabay_key: str = ""
+    llm_provider: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_base_url: Optional[str] = None
 
 def load_settings():
+    base_settings = {
+        "pexels_key": settings.PEXELS_API_KEY or "",
+        "pixabay_key": settings.PIXABAY_API_KEY or "",
+        "llm_provider": settings.LLM_PROVIDER or "",
+        "llm_api_key": settings.LLM_API_KEY or "",
+        "llm_model": settings.LLM_MODEL or "",
+        "llm_base_url": settings.LLM_BASE_URL or ""
+    }
     if SETTINGS_PATH.exists():
         try:
             with open(SETTINGS_PATH, "r") as f:
-                return json.load(f)
+                saved = json.load(f)
+                base_settings.update(saved)
         except:
             pass
-    return {"pexels_key": settings.PEXELS_API_KEY or "", "pixabay_key": settings.PIXABAY_API_KEY or ""}
+    return base_settings
+
+def apply_settings_to_env():
+    s = load_settings()
+    settings.PEXELS_API_KEY = s.get("pexels_key", "")
+    settings.PIXABAY_API_KEY = s.get("pixabay_key", "")
+    settings.LLM_PROVIDER = s.get("llm_provider", "")
+    settings.LLM_API_KEY = s.get("llm_api_key", "")
+    settings.LLM_MODEL = s.get("llm_model", "")
+    settings.LLM_BASE_URL = s.get("llm_base_url", "")
 
 @router.get("/settings")
 def get_settings():
@@ -282,18 +305,26 @@ def get_settings():
         "pexels": "Configured" if s.get("pexels_key") else "Not configured",
         "pixabay": "Configured" if s.get("pixabay_key") else "Not configured",
         "openverse": "No key required",
-        "wikimedia": "No key required"
+        "wikimedia": "No key required",
+        "llm_provider": s.get("llm_provider", ""),
+        "llm_api_key": "Configured" if s.get("llm_api_key") else "Not configured",
+        "llm_model": s.get("llm_model", ""),
+        "llm_base_url": s.get("llm_base_url", "")
     }
 
 @router.post("/settings")
 def update_settings(req: SettingsUpdate):
     s = load_settings()
-    if req.pexels_key: s["pexels_key"] = req.pexels_key
-    if req.pixabay_key: s["pixabay_key"] = req.pixabay_key
+    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key
+    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key
+    if req.llm_provider is not None: s["llm_provider"] = req.llm_provider
+    if req.llm_api_key is not None and req.llm_api_key != "": s["llm_api_key"] = req.llm_api_key
+    if req.llm_model is not None: s["llm_model"] = req.llm_model
+    if req.llm_base_url is not None: s["llm_base_url"] = req.llm_base_url
+    
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
-    settings.PEXELS_API_KEY = s["pexels_key"]
-    settings.PIXABAY_API_KEY = s["pixabay_key"]
+    apply_settings_to_env()
     return get_settings()
 
 @router.delete("/settings/{provider}")
@@ -301,12 +332,17 @@ def delete_setting(provider: str):
     s = load_settings()
     if provider.lower() == "pexels":
         s["pexels_key"] = ""
-        settings.PEXELS_API_KEY = ""
     elif provider.lower() == "pixabay":
         s["pixabay_key"] = ""
-        settings.PIXABAY_API_KEY = ""
+    elif provider.lower() == "llm":
+        s["llm_api_key"] = ""
+        s["llm_provider"] = ""
+        s["llm_model"] = ""
+        s["llm_base_url"] = ""
+        
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
+    apply_settings_to_env()
     return get_settings()
 
 from fastapi.responses import FileResponse
