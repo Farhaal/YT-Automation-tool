@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added two-stage topic-aware LLM query generation. When an LLM key is configured, the system first summarizes the global video context and injects it into per-scene queries, producing highly accurate, globally consistent search terms.
+
 ### Fixed
 - Fixed 502 Bad Gateway errors on asset downloads (like Flickr-hosted Openverse images) and strict provider API rejections (Wikimedia) by passing a standard browser `User-Agent` header in all requests.
-- Fixed API endpoint for Openverse provider to correctly follow redirects on `api.openverse.org`.
+- Fixed API endpoint for Openverse provider to correctly follow redirects on `api.openverse.org`, and increased search timeout to 20.0s for improved reliability.
 - Fixed robust fallback for Wikimedia provider to also safely follow HTTP redirects.
 - Fixed test suites to strictly isolate `SETTINGS_PATH` inside `tmp_path`, guaranteeing local user data is untouched by test runs.
 - Fixed crash in scene segmentation for users without an LLM key (removed stale `settings.USE_OLLAMA` reference that no longer exists in config).

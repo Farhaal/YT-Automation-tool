@@ -18,7 +18,7 @@ class OpenverseProvider(AssetProvider):
                 "https://api.openverse.org/v1/images/",
                 headers={"User-Agent": USER_AGENT},
                 params={"q": query, "page_size": 5},
-                timeout=5.0,
+                timeout=20.0,
                 follow_redirects=True
             )
             if resp.status_code == 200:
