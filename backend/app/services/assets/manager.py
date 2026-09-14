@@ -115,10 +115,40 @@ class AssetManager:
                         candidates.append(a)
         return candidates
 
-    def _rank_and_download(self, candidates, orientation, scene_duration, full_scene_query):
+    def _rank_and_download(self, candidates, orientation, scene_duration, full_scene_query, scene_text="", topic=""):
+        from backend.app.core.config import settings
+        from backend.app.services.verification import verify_scene_candidates
+        
         ranked = self.rank_assets(candidates, orientation, scene_duration, full_scene_query)
         best_asset = None
         backup_asset = None
+        
+        # --- VERIFICATION STEP ---
+        if settings.ENABLE_VISUAL_VERIFICATION and settings.LLM_API_KEY:
+            top_k = [c for c in ranked if c.preview_image_url][:4]
+            if top_k:
+                verification_result = verify_scene_candidates(
+                    scene_text=scene_text,
+                    topic=topic,
+                    candidates=top_k,
+                    openrouter_key=settings.LLM_API_KEY,
+                    vision_model=settings.VISION_MODEL
+                )
+                if verification_result:
+                    best_idx = verification_result["best_index"]
+                    verified_best = top_k[best_idx]
+                    verified_best.match_score = verification_result["score"]
+                    verified_best.match_reason = verification_result["reason"]
+                    
+                    # Move verified best to the front of ranked list
+                    ranked.remove(verified_best)
+                    ranked.insert(0, verified_best)
+                else:
+                    # Mark top ranked as needing review if verification fails
+                    if ranked:
+                        ranked[0].match_score = 0.0
+                        ranked[0].match_reason = "Verification failed or skipped."
+        # -------------------------
         
         for asset in ranked:
             provider = next((p for p in self.providers if p.name == asset.provider), None)
@@ -153,13 +183,19 @@ class AssetManager:
                 # Phase 1: Fast Tier
                 candidates = self._concurrent_search(self.fast_tier, query, query_idx, orientation)
                 if candidates:
-                    best_asset, backup_asset = self._rank_and_download(candidates, orientation, scene_duration, full_scene_query)
+                    best_asset, backup_asset = self._rank_and_download(
+                        candidates, orientation, scene_duration, full_scene_query,
+                        scene_text=scene.get("text", ""), topic=scene.get("topic", "")
+                    )
                 
                 # Phase 2: Slow Tier (only if fast tier yielded nothing usable)
                 if not best_asset:
                     slow_candidates = self._concurrent_search(self.slow_tier, query, query_idx, orientation)
                     if slow_candidates:
-                        best_asset, backup_asset = self._rank_and_download(slow_candidates, orientation, scene_duration, full_scene_query)
+                        best_asset, backup_asset = self._rank_and_download(
+                            slow_candidates, orientation, scene_duration, full_scene_query,
+                            scene_text=scene.get("text", ""), topic=scene.get("topic", "")
+                        )
                 
                 # Early exit if we found a good asset
                 if best_asset:
@@ -167,5 +203,13 @@ class AssetManager:
                         
             scene["asset"] = best_asset.model_dump() if best_asset else None
             scene["backup_asset"] = backup_asset.model_dump() if backup_asset else None
+            
+            # Carry over verification flags if they exist
+            if best_asset:
+                score = getattr(best_asset, "match_score", None)
+                if score is not None:
+                    scene["match_score"] = score
+                    scene["match_reason"] = getattr(best_asset, "match_reason", None)
+                    scene["needs_review"] = (score < 0.5)
             
         return scenes

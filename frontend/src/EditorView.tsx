@@ -311,11 +311,26 @@ export default function EditorView({ jobId }: { jobId: string }) {
           <div className="space-y-4">
             {timeline.scenes.map((s: any, idx: number) => (
               <Card key={s.id} className="p-5 overflow-hidden group hover:border-primary/50 transition-colors">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                    {s.start.toFixed(1)}s - {s.end.toFixed(1)}s
-                  </div>
-                  {s.backup_asset && (
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex gap-2 items-center">
+                      <div className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
+                        {s.start.toFixed(1)}s - {s.end.toFixed(1)}s
+                      </div>
+                      {s.match_score !== undefined && (
+                        <div 
+                          className="text-[10px] font-bold tracking-wider px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                          title={s.match_reason}
+                        >
+                          MATCH {(s.match_score).toFixed(2)}
+                        </div>
+                      )}
+                      {s.needs_review && (
+                        <div className="text-[10px] font-bold tracking-wider px-2 py-1 rounded bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                          NEEDS REVIEW
+                        </div>
+                      )}
+                    </div>
+                    {s.backup_asset && (
                     <Button onClick={() => swapBackup(idx)} size="sm" variant="secondary" className="h-7 text-xs gap-1.5 rounded-full">
                       <ArrowLeftRight className="w-3 h-3 text-primary" /> Swap Alternate
                     </Button>

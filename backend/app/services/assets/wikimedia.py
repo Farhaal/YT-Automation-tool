@@ -27,6 +27,7 @@ class WikimediaProvider(AssetProvider):
                     "srsort": "relevance",
                     "prop": "imageinfo",
                     "iiprop": "url|size|extmetadata",
+                    "iiurlwidth": 400,
                     "format": "json"
                 },
                 timeout=5.0,
@@ -74,7 +75,8 @@ class WikimediaProvider(AssetProvider):
                         height=info.get("height", 0),
                         attribution_required=True,
                         attribution_text=attribution_text,
-                        query=query
+                        query=query,
+                        preview_image_url=info.get("thumburl", info["url"])
                     ))
         except Exception as e:
             logger.warning(f"Wikimedia search failed for '{query}': {type(e).__name__}")

@@ -52,7 +52,10 @@
               "type": { "type": "string", "enum": ["none", "crossfade"] },
               "duration": { "type": "number", "minimum": 0 }
             }
-          }
+          },
+          "match_score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "match_reason": { "type": "string" },
+          "needs_review": { "type": "boolean" }
         }
       }
     },

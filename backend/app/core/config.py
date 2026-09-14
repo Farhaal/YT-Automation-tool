@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     LLM_API_KEY: Optional[str] = None
     LLM_MODEL: Optional[str] = None
     LLM_BASE_URL: Optional[str] = None
+    
+    ENABLE_VISUAL_VERIFICATION: bool = False
+    VISION_MODEL: str = "google/gemini-2.0-flash-exp:free"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

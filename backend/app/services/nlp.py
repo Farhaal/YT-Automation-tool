@@ -189,6 +189,7 @@ def process_script_to_scenes(words: List[Dict[str, Any]]) -> List[Dict[str, Any]
         topic = analyze_transcript_topic(full_text)
         
     for scene in scenes:
+        scene["topic"] = topic
         if use_llm:
             scene["queries"] = extract_visual_queries_with_llm(scene["text"], topic_context=topic)
         else:

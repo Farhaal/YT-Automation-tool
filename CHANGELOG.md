@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added optional AI visual verification to intelligently rank stock footage candidates by allowing an OpenRouter Vision model (like `google/gemini-2.0-flash-exp:free`) to inspect clip thumbnails and compare them to the scene text, ensuring significantly higher thematic accuracy than keyword search alone.
 - Implemented OpenTimelineIO (OTIO) integration to export the assembled timeline into native NLE formats. Supports generating target-specific `project.fcpxml` and `timeline.edl` for DaVinci Resolve and Premiere Pro, and structured media bundles for CapCut.
 - Enhanced the timeline exporter to output pre-cut, perfectly timed contiguous clips using `ffmpeg`. Editors (like CapCut) can now drop the clips sequentially into a timeline and they will automatically sync to the narration without manual trimming.
 - Made the in-app render fully optional. The generation pipeline now successfully completes without automatically rendering a draft video, significantly reducing waiting time. Users can review inline individual clip previews, then directly export their project or explicitly choose to render a preview.

@@ -55,7 +55,8 @@ class PixabayProvider(AssetProvider):
                         duration=v.get("duration", 0.0),
                         attribution_required=False,
                         tags=[t.strip() for t in v.get("tags", "").split(",") if t.strip()],
-                        query=query
+                        query=query,
+                        preview_image_url=f"https://i.vimeocdn.com/video/{v['picture_id']}_295x166.jpg" if v.get("picture_id") else None
                     ))
             
             # 2. Search Images
@@ -82,7 +83,8 @@ class PixabayProvider(AssetProvider):
                         height=p.get("imageHeight", 0),
                         attribution_required=False,
                         tags=[t.strip() for t in p.get("tags", "").split(",") if t.strip()],
-                        query=query
+                        query=query,
+                        preview_image_url=p.get("webformatURL", p.get("previewURL"))
                     ))
         except Exception as e:
             logger.warning(f"Pixabay search failed for '{query}': {type(e).__name__}")

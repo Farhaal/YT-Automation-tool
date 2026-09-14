@@ -40,7 +40,8 @@ class OpenverseProvider(AssetProvider):
                         attribution_text=p.get("attribution"),
                         title=p.get("title"),
                         tags=[t.get("name") for t in p.get("tags", []) if isinstance(t, dict)],
-                        query=query
+                        query=query,
+                        preview_image_url=p.get("thumbnail")
                     ))
         except Exception as e:
             logger.warning(f"Openverse search failed for '{query}': {type(e).__name__}")

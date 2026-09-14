@@ -34,3 +34,7 @@ class AssetMetadata(BaseModel):
     
     local_path: Optional[str] = None
     cache_key: Optional[str] = None
+    
+    preview_image_url: Optional[str] = None
+    match_score: Optional[float] = None
+    match_reason: Optional[str] = None

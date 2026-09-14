@@ -52,7 +52,8 @@ class PexelsProvider(AssetProvider):
                         height=best_file.get("height", 0),
                         duration=v.get("duration", 0.0),
                         attribution_required=False,
-                        query=query
+                        query=query,
+                        preview_image_url=v.get("image")
                     ))
             
             # 2. Search Images (Fallback)
@@ -79,7 +80,8 @@ class PexelsProvider(AssetProvider):
                         height=p.get("height", 0),
                         attribution_required=False,
                         title=p.get("alt") or None,
-                        query=query
+                        query=query,
+                        preview_image_url=p.get("src", {}).get("medium")
                     ))
         except Exception as e:
             logger.warning(f"Pexels search failed for '{query}': {type(e).__name__}")

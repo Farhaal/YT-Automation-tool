@@ -292,6 +292,8 @@ class SettingsUpdate(BaseModel):
     llm_api_key: Optional[str] = None
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
+    enable_visual_verification: Optional[bool] = None
+    vision_model: Optional[str] = None
 
 def load_settings():
     base_settings = {
@@ -300,7 +302,9 @@ def load_settings():
         "llm_provider": settings.LLM_PROVIDER or "",
         "llm_api_key": settings.LLM_API_KEY or "",
         "llm_model": settings.LLM_MODEL or "",
-        "llm_base_url": settings.LLM_BASE_URL or ""
+        "llm_base_url": settings.LLM_BASE_URL or "",
+        "enable_visual_verification": settings.ENABLE_VISUAL_VERIFICATION,
+        "vision_model": settings.VISION_MODEL
     }
     if SETTINGS_PATH.exists():
         try:
@@ -313,12 +317,14 @@ def load_settings():
 
 def apply_settings_to_env():
     s = load_settings()
-    settings.PEXELS_API_KEY = s.get("pexels_key", "")
-    settings.PIXABAY_API_KEY = s.get("pixabay_key", "")
-    settings.LLM_PROVIDER = s.get("llm_provider", "")
-    settings.LLM_API_KEY = s.get("llm_api_key", "")
-    settings.LLM_MODEL = s.get("llm_model", "")
-    settings.LLM_BASE_URL = s.get("llm_base_url", "")
+    settings.PEXELS_API_KEY = s.get("pexels_key", settings.PEXELS_API_KEY)
+    settings.PIXABAY_API_KEY = s.get("pixabay_key", settings.PIXABAY_API_KEY)
+    settings.LLM_PROVIDER = s.get("llm_provider", settings.LLM_PROVIDER)
+    settings.LLM_API_KEY = s.get("llm_api_key", settings.LLM_API_KEY)
+    settings.LLM_MODEL = s.get("llm_model", settings.LLM_MODEL)
+    settings.LLM_BASE_URL = s.get("llm_base_url", settings.LLM_BASE_URL)
+    settings.ENABLE_VISUAL_VERIFICATION = s.get("enable_visual_verification", settings.ENABLE_VISUAL_VERIFICATION)
+    settings.VISION_MODEL = s.get("vision_model", settings.VISION_MODEL)
 
 @router.get("/settings")
 def get_settings():
@@ -331,7 +337,9 @@ def get_settings():
         "llm_provider": s.get("llm_provider", ""),
         "llm_api_key": "Configured" if s.get("llm_api_key") else "Not configured",
         "llm_model": s.get("llm_model", ""),
-        "llm_base_url": s.get("llm_base_url", "")
+        "llm_base_url": s.get("llm_base_url", ""),
+        "enable_visual_verification": s.get("enable_visual_verification", False),
+        "vision_model": s.get("vision_model", "google/gemini-2.0-flash-exp:free")
     }
 
 @router.post("/settings")
@@ -343,6 +351,8 @@ def update_settings(req: SettingsUpdate):
     if req.llm_api_key is not None and req.llm_api_key != "": s["llm_api_key"] = req.llm_api_key  # noqa: E701
     if req.llm_model is not None: s["llm_model"] = req.llm_model  # noqa: E701
     if req.llm_base_url is not None: s["llm_base_url"] = req.llm_base_url  # noqa: E701
+    if req.enable_visual_verification is not None: s["enable_visual_verification"] = req.enable_visual_verification  # noqa: E701
+    if req.vision_model is not None: s["vision_model"] = req.vision_model  # noqa: E701
     
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)

@@ -58,6 +58,9 @@ flowchart LR
 
 The heart of the tool is **word-level timing**: because every visual is anchored to when a word is actually spoken, sync is correct by construction.
 
+### Visual Verification
+When an OpenRouter key is configured, you can enable **AI clip verification** in the Settings. Instead of just relying on keyword relevance, OpenReel will feed the thumbnails of the top candidate clips directly into a Vision model (such as `google/gemini-2.0-flash-exp:free`, `meta-llama/llama-3.2-11b-vision-instruct:free`, or `openai/gpt-4o-mini`) alongside the script's topic and exact text. The Vision model will visually inspect the candidates and pick the one that truly makes the most sense. Badges in the editor highlight exactly which clips were confidently matched and which ones might need a quick human review.
+
 ## Tech stack
 
 | Layer        | Tools (all free / open-source)                                        |

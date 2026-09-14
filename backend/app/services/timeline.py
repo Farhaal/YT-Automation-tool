@@ -62,6 +62,10 @@ class TimelineAssembler:
             if transition:
                 timeline_scene["transition_out"] = transition
                 
+            if "match_score" in scene: timeline_scene["match_score"] = scene["match_score"]
+            if "match_reason" in scene: timeline_scene["match_reason"] = scene["match_reason"]
+            if "needs_review" in scene: timeline_scene["needs_review"] = scene["needs_review"]
+                
             timeline_scenes.append(timeline_scene)
             
         captions = []

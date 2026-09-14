@@ -12,6 +12,9 @@ export default function SettingsView() {
   const [llmApiKey, setLlmApiKey] = useState('');
   const [llmModel, setLlmModel] = useState('');
   const [llmBaseUrl, setLlmBaseUrl] = useState('');
+  
+  const [enableVisualVerification, setEnableVisualVerification] = useState(false);
+  const [visionModel, setVisionModel] = useState('');
 
   const { toast } = useToast();
 
@@ -23,6 +26,8 @@ export default function SettingsView() {
         if (data.llm_provider) setLlmProvider(data.llm_provider);
         if (data.llm_model) setLlmModel(data.llm_model);
         if (data.llm_base_url) setLlmBaseUrl(data.llm_base_url);
+        if (data.enable_visual_verification !== undefined) setEnableVisualVerification(data.enable_visual_verification);
+        if (data.vision_model) setVisionModel(data.vision_model);
       });
   };
 
@@ -53,7 +58,9 @@ export default function SettingsView() {
           llm_provider: llmProvider,
           llm_api_key: llmApiKey,
           llm_model: llmModel,
-          llm_base_url: llmBaseUrl
+          llm_base_url: llmBaseUrl,
+          enable_visual_verification: enableVisualVerification,
+          vision_model: visionModel
         })
       });
       setLlmApiKey('');
@@ -214,6 +221,37 @@ export default function SettingsView() {
                     onChange={e => setLlmBaseUrl(e.target.value)} 
                     placeholder="Custom endpoint"
                   />
+                </div>
+              </div>
+
+              <div className="mt-6 border-t pt-4">
+                <h4 className="font-semibold text-sm text-foreground mb-3">Visual Verification</h4>
+                
+                <div className="space-y-4">
+                  <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={enableVisualVerification} 
+                      onChange={e => setEnableVisualVerification(e.target.checked)}
+                      className="rounded border-input text-primary focus:ring-primary"
+                    />
+                    AI clip verification (accuracy) &mdash; uses a vision model via your OpenRouter key
+                  </label>
+
+                  {enableVisualVerification && (
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5">Vision Model</label>
+                      <Input 
+                        type="text" 
+                        value={visionModel} 
+                        onChange={e => setVisionModel(e.target.value)} 
+                        placeholder="e.g. google/gemini-2.0-flash-exp:free"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Default: google/gemini-2.0-flash-exp:free. Good alternatives: meta-llama/llama-3.2-11b-vision-instruct:free, openai/gpt-4o-mini
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
