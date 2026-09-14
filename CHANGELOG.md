@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added full 1080p final render functionality, exposed via the Editor UI, allowing users to switch between fast preview drafts and high-quality final outputs.
+- Added intelligent subtitle grouping (line-level captions) which chunks words into natural, readable phrases synced to the audio, significantly improving visual quality.
+- Added gap-free visual layout rendering so that background clips remain contiguous and eliminate flashing black frames during audio pauses.
 - Added two-stage topic-aware LLM query generation. When an LLM key is configured, the system first summarizes the global video context and injects it into per-scene queries, producing highly accurate, globally consistent search terms.
 
 ### Fixed

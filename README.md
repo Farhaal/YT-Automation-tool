@@ -125,7 +125,7 @@ OpenReel is designed to be configurable for a balance of speed and quality:
 
 ## Roadmap
 
-- [ ] P9: Full-resolution export and auto-generated credits file
+- [ ] Auto-generated credits file
 - [ ] P10: App packaging and polish
 - [ ] P11: Visual verification (optional re-ranking)
 

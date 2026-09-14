@@ -95,3 +95,4 @@ _One line per work session or completed phase, newest at the bottom._
 - 2026-09-14: Standardized CI pipeline by adding Ruff (E, F, I) formatting configuration, fixing remaining lint errors, and properly provisioning the GitHub Actions test runner with FFmpeg and spaCy dependencies.
 - 2026-09-14: Fixed Openverse endpoint domain, increased timeout, added redirect handling to Openverse/Wikimedia, rigorously isolated settings file path across test suites, and added global User-Agent header to prevent 502/rejection errors on asset APIs and downloads.
 - 2026-09-14: Introduced two-stage topic-aware LLM query extraction, summarizing global transcript context to guide highly accurate per-scene visual queries.
+- 2026-09-14: Massively improved visual render quality: implemented contiguous gap-free scene backgrounds, grouped subtitle words into natural readable lines anchored safely at the screen bottom, and exposed a 1080p 'Final Render' button in the frontend Editor.

@@ -62,6 +62,22 @@ export default function EditorView({ jobId }: { jobId: string }) {
     setLoading(false);
   };
 
+  const renderFinal = async () => {
+    setLoading(true);
+    await fetch(`http://localhost:8000/jobs/${jobId}/timeline`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(timeline)
+    });
+    // Request final render
+    await fetch(`http://localhost:8000/jobs/${jobId}/render`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft_mode: false })
+    });
+    setLoading(false);
+  };
+
   const swapBackup = (sceneIndex: number) => {
     const t = { ...timeline };
     const s = t.scenes[sceneIndex];
@@ -104,26 +120,34 @@ export default function EditorView({ jobId }: { jobId: string }) {
     );
   }
 
-  if (!timeline) {
-    return <button onClick={loadTimeline} className="bg-blue-500 text-white px-4 py-2 rounded">Load Timeline</button>;
-  }
+  if (!timeline) return <div className="p-8 text-center"><Loader className="w-8 h-8 animate-spin mx-auto text-blue-500" /></div>;
+
+  const currentVideo = job.final_video_path || job.draft_video_path;
 
   return (
     <div className="grid lg:grid-cols-2 gap-6 items-start">
       <div className="bg-white rounded shadow flex flex-col overflow-hidden sticky top-6">
         <div className="bg-black aspect-[9/16] w-full max-h-[60vh] flex items-center justify-center relative">
-          {job.draft_video_path ? (
-            <video controls src={`http://localhost:8000/media?path=${encodeURIComponent(job.draft_video_path)}`} className="h-full object-contain" />
+          {currentVideo ? (
+            <video controls src={`http://localhost:8000/media?path=${encodeURIComponent(currentVideo)}`} className="h-full object-contain" />
           ) : (
             <div className="text-white text-center">Video preview not available</div>
           )}
         </div>
-        <div className="p-4 bg-gray-50 flex justify-between items-center border-t">
-          <span className="font-semibold text-gray-700">Draft Preview</span>
-          <button onClick={saveTimeline} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 flex items-center gap-2">
-            {loading ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Re-render Draft
-          </button>
+        <div className="p-4 bg-gray-50 flex justify-between items-center border-t flex-wrap gap-2">
+          <span className="font-semibold text-gray-700">
+            {job.final_video_path ? "Final Preview" : "Draft Preview"}
+          </span>
+          <div className="flex gap-2">
+            <button onClick={saveTimeline} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 flex items-center gap-2">
+              {loading ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Re-render Draft
+            </button>
+            <button onClick={renderFinal} disabled={loading} className="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 flex items-center gap-2">
+              {loading ? <Loader className="w-4 h-4 animate-spin" /> : null}
+              Render Final (1080p)
+            </button>
+          </div>
         </div>
       </div>
 
