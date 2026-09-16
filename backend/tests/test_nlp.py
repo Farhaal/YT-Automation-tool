@@ -85,3 +85,43 @@ def test_scene_segmentation_with_topic_llm(monkeypatch):
     assert len(scenes) == 1
     assert calls == ["topic", "queries"]
     assert scenes[0]["queries"] == ["underwater footage", "sea life"]
+
+def test_regression_sync_preservation():
+    synthetic_text = "This is a synthetic test, and it has clauses. It also has a very long section with no punctuation so it forces a duration split but we also add a conjunction here. Finally, it ends."
+    
+    words = []
+    current_time = 0.0
+    word_duration = 0.4
+    raw_words = synthetic_text.split()
+    
+    for w in raw_words:
+        words.append({
+            "word": w,
+            "start": round(current_time, 2),
+            "end": round(current_time + word_duration, 2)
+        })
+        current_time += word_duration + 0.1  # 0.1s gap between words
+
+    min_dur = 1.2
+    
+    for max_d in [2.5, 3.5, 5.0]:
+        scenes = segment_into_scenes(words, max_duration=max_d, min_duration=min_dur)
+        
+        # 1. Word preservation & ordering
+        reconstructed_text = " ".join(s["text"] for s in scenes)
+        assert reconstructed_text == synthetic_text, f"Word mismatch at max_duration {max_d}"
+        
+        # 2. Chronological and cover audio start-to-end
+        assert scenes[0]["start"] == words[0]["start"]
+        assert scenes[-1]["end"] == words[-1]["end"]
+        
+        last_end = -1.0
+        for i, s in enumerate(scenes):
+            assert s["start"] >= last_end
+            assert s["end"] > s["start"]
+            last_end = s["end"]
+            
+            # 3. No non-final scene is shorter than min_duration
+            if i < len(scenes) - 1:
+                dur = s["end"] - s["start"]
+                assert dur >= min_dur, f"Scene {i} duration {dur} < {min_dur} at max_d {max_d}"
