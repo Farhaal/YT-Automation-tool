@@ -16,10 +16,7 @@ class Settings(BaseSettings):
     TTS_ENGINE: str = "pyttsx3"
     OLLAMA_URL: str = "http://localhost:11434"
     # Optional LLM for smarter query extraction
-    LLM_PROVIDER: Optional[str] = None
-    LLM_API_KEY: Optional[str] = None
-    LLM_MODEL: Optional[str] = None
-    LLM_BASE_URL: Optional[str] = None
+    LLM_PROVIDERS: list = []
     
     ENABLE_VISUAL_VERIFICATION: bool = False
     VISION_MODEL: str = "google/gemini-2.0-flash-exp:free"

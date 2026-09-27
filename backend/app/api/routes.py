@@ -28,7 +28,7 @@ async def notify_job_update(job_id: str, data: dict):
         for ws in dead_ws:
             active_connections[job_id].remove(ws)
 
-def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True, pace: str = "balanced"):  # noqa: E501
+def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_ratio: str = "landscape", enable_motion: bool = True, pace: str = "balanced", punchy_hook: bool = True):  # noqa: E501
     def sync_notify(job_id, data):
         try:
             asyncio.run_coroutine_threadsafe(notify_job_update(job_id, data), loop)
@@ -64,18 +64,29 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         
         update(40, "Segmenting scenes", log_msg="Analyzing transcript with NLP to segment scenes and extract visual search queries...")
         from backend.app.services.nlp import process_script_to_scenes
-        scenes = process_script_to_scenes(words, pace=pace)
+        job_state = {"dead_providers": set(), "llm_failover_log": [], "llm_warnings": []}
+        scenes = process_script_to_scenes(words, pace=pace, punchy_hook=punchy_hook, job_state=job_state)
         
         update(60, "Finding assets", log_msg=f"Searching Pexels, Pixabay, Openverse, and Wikimedia for {len(scenes)} scenes...")
         from backend.app.services.assets.manager import AssetManager
         
         s = load_settings()
         import os
-        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]  # noqa: E701
-        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]  # noqa: E701
+        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]
+        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
         
         asset_manager = AssetManager(cache_dir=DATA / "assets")
-        scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio)
+        scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio, job_state=job_state)
+        
+        # Determine llm_warning
+        llm_warning = None
+        if job_state["llm_warnings"]:
+            # If all failed
+            llm_warning = {
+                "used_provider": job_state.get("used_provider"),
+                "failed": job_state["llm_failover_log"]
+            }
+            job_manager.update_job(job_id, llm_warning=llm_warning)
                 
         update(80, "Building timeline", log_msg="Assembling final timeline with Ken Burns motion, transitions, and generated subtitles...")
         from backend.app.services.timeline import TimelineAssembler
@@ -109,6 +120,7 @@ class GenerateRequest(BaseModel):
     aspect_ratio: str = "landscape"
     enable_motion: bool = True
     pace: str = "balanced"
+    punchy_hook: bool = True
 
 @router.get("/health")
 def health_check():
@@ -122,14 +134,14 @@ async def generate_from_script(req: GenerateRequest, background_tasks: Backgroun
     job_id = str(uuid.uuid4())
     job_manager.create_job(job_id, script=req.script)
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion, req.pace)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, req.aspect_ratio, req.enable_motion, req.pace, req.punchy_hook)
     return job_manager.get_job(job_id)
 
 from fastapi import Form  # noqa: E402
 
 
 @router.post("/generate/audio")
-async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True), pace: str = Form("balanced")):  # noqa: E501
+async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...), aspect_ratio: str = Form("landscape"), enable_motion: bool = Form(True), pace: str = Form("balanced"), punchy_hook: bool = Form(True)):  # noqa: E501
     import asyncio
     job_id = str(uuid.uuid4())
     temp_path = DATA / "tmp" / f"{job_id}_{audio_file.filename}"
@@ -138,7 +150,7 @@ async def generate_from_audio(background_tasks: BackgroundTasks, audio_file: Upl
         f.write(await audio_file.read())
     job_manager.create_job(job_id, audio_path=str(temp_path))
     loop = asyncio.get_running_loop()
-    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio, enable_motion, pace)
+    background_tasks.add_task(run_job_pipeline_sync, job_id, loop, aspect_ratio, enable_motion, pace, punchy_hook)
     return job_manager.get_job(job_id)
 
 @router.get("/jobs/{job_id}")
@@ -285,33 +297,56 @@ async def export_job(job_id: str, req: ExportRequest):
 # --- Settings API ---
 SETTINGS_PATH = DATA / "settings.json"
 
+class LLMProviderConfig(BaseModel):
+    provider: str
+    api_key: str = ""
+    model: str = ""
+    enabled: bool = True
+
 class SettingsUpdate(BaseModel):
-    pexels_key: str = ""
-    pixabay_key: str = ""
-    llm_provider: Optional[str] = None
-    llm_api_key: Optional[str] = None
-    llm_model: Optional[str] = None
-    llm_base_url: Optional[str] = None
+    pexels_key: Optional[str] = None
+    pixabay_key: Optional[str] = None
+    llm_providers: Optional[List[LLMProviderConfig]] = None
     enable_visual_verification: Optional[bool] = None
     vision_model: Optional[str] = None
+
+class TestLLMRequest(BaseModel):
+    provider: str
+    api_key: str = ""
+    model: str = ""
 
 def load_settings():
     base_settings = {
         "pexels_key": settings.PEXELS_API_KEY or "",
         "pixabay_key": settings.PIXABAY_API_KEY or "",
-        "llm_provider": settings.LLM_PROVIDER or "",
-        "llm_api_key": settings.LLM_API_KEY or "",
-        "llm_model": settings.LLM_MODEL or "",
-        "llm_base_url": settings.LLM_BASE_URL or "",
         "enable_visual_verification": settings.ENABLE_VISUAL_VERIFICATION,
-        "vision_model": settings.VISION_MODEL
+        "vision_model": settings.VISION_MODEL,
+        "llm_providers": settings.LLM_PROVIDERS or []
     }
     if SETTINGS_PATH.exists():
         try:
             with open(SETTINGS_PATH, "r") as f:
                 saved = json.load(f)
-                base_settings.update(saved)
-        except:  # noqa: E722
+                
+                if "llm_provider" in saved and "llm_providers" not in saved:
+                    prov_list = []
+                    if saved.get("llm_provider"):
+                        prov_list.append({
+                            "provider": saved.get("llm_provider", ""),
+                            "api_key": saved.get("llm_api_key", ""),
+                            "model": saved.get("llm_model", ""),
+                            "enabled": True
+                        })
+                    saved["llm_providers"] = prov_list
+                    
+                if "llm_providers" in saved:
+                    base_settings["llm_providers"] = saved["llm_providers"]
+                    
+                base_settings["pexels_key"] = saved.get("pexels_key", base_settings["pexels_key"])
+                base_settings["pixabay_key"] = saved.get("pixabay_key", base_settings["pixabay_key"])
+                base_settings["enable_visual_verification"] = saved.get("enable_visual_verification", base_settings["enable_visual_verification"])
+                base_settings["vision_model"] = saved.get("vision_model", base_settings["vision_model"])
+        except:
             pass
     return base_settings
 
@@ -319,40 +354,40 @@ def apply_settings_to_env():
     s = load_settings()
     settings.PEXELS_API_KEY = s.get("pexels_key", settings.PEXELS_API_KEY)
     settings.PIXABAY_API_KEY = s.get("pixabay_key", settings.PIXABAY_API_KEY)
-    settings.LLM_PROVIDER = s.get("llm_provider", settings.LLM_PROVIDER)
-    settings.LLM_API_KEY = s.get("llm_api_key", settings.LLM_API_KEY)
-    settings.LLM_MODEL = s.get("llm_model", settings.LLM_MODEL)
-    settings.LLM_BASE_URL = s.get("llm_base_url", settings.LLM_BASE_URL)
+    settings.LLM_PROVIDERS = s.get("llm_providers", settings.LLM_PROVIDERS)
     settings.ENABLE_VISUAL_VERIFICATION = s.get("enable_visual_verification", settings.ENABLE_VISUAL_VERIFICATION)
     settings.VISION_MODEL = s.get("vision_model", settings.VISION_MODEL)
 
 @router.get("/settings")
 def get_settings():
     s = load_settings()
+    masked = []
+    for p in s.get("llm_providers", []):
+        masked.append({
+            "provider": p.get("provider", ""),
+            "model": p.get("model", ""),
+            "enabled": p.get("enabled", True),
+            "status": "Configured" if p.get("api_key") else "Not configured"
+        })
     return {
         "pexels": "Configured" if s.get("pexels_key") else "Not configured",
         "pixabay": "Configured" if s.get("pixabay_key") else "Not configured",
         "openverse": "No key required",
         "wikimedia": "No key required",
-        "llm_provider": s.get("llm_provider", ""),
-        "llm_api_key": "Configured" if s.get("llm_api_key") else "Not configured",
-        "llm_model": s.get("llm_model", ""),
-        "llm_base_url": s.get("llm_base_url", ""),
+        "llm_providers": masked,
         "enable_visual_verification": s.get("enable_visual_verification", False),
-        "vision_model": s.get("vision_model", "google/gemini-2.0-flash-exp:free")
+        "vision_model": s.get("vision_model", "")
     }
 
 @router.post("/settings")
 def update_settings(req: SettingsUpdate):
     s = load_settings()
-    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key  # noqa: E701
-    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key  # noqa: E701
-    if req.llm_provider is not None: s["llm_provider"] = req.llm_provider  # noqa: E701
-    if req.llm_api_key is not None and req.llm_api_key != "": s["llm_api_key"] = req.llm_api_key  # noqa: E701
-    if req.llm_model is not None: s["llm_model"] = req.llm_model  # noqa: E701
-    if req.llm_base_url is not None: s["llm_base_url"] = req.llm_base_url  # noqa: E701
-    if req.enable_visual_verification is not None: s["enable_visual_verification"] = req.enable_visual_verification  # noqa: E701
-    if req.vision_model is not None: s["vision_model"] = req.vision_model  # noqa: E701
+    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key
+    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key
+    if req.llm_providers is not None:
+        s["llm_providers"] = [p.dict() for p in req.llm_providers]
+    if req.enable_visual_verification is not None: s["enable_visual_verification"] = req.enable_visual_verification
+    if req.vision_model is not None: s["vision_model"] = req.vision_model
     
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
@@ -367,15 +402,58 @@ def delete_setting(provider: str):
     elif provider.lower() == "pixabay":
         s["pixabay_key"] = ""
     elif provider.lower() == "llm":
-        s["llm_api_key"] = ""
-        s["llm_provider"] = ""
-        s["llm_model"] = ""
-        s["llm_base_url"] = ""
+        s["llm_providers"] = []
         
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
     apply_settings_to_env()
     return get_settings()
+
+@router.post("/settings/test-llm")
+def test_llm_settings(req: TestLLMRequest):
+    import httpx
+    
+    provider = req.provider.lower()
+    base_url = "https://api.openai.com/v1"
+    model = req.model or "gpt-3.5-turbo"
+    
+    if provider == "groq":
+        base_url = "https://api.groq.com/openai/v1"
+        model = req.model or "llama3-8b-8192"
+    elif provider == "openrouter":
+        base_url = "https://openrouter.ai/api/v1"
+    elif provider == "ollama":
+        base_url = "http://localhost:11434/v1"
+        model = req.model or "llama3"
+    elif provider in ["gemini", "google"]:
+        base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+        model = req.model or "gemini-2.0-flash"
+        
+    headers = {"Content-Type": "application/json"}
+    if req.api_key:
+        headers["Authorization"] = f"Bearer {req.api_key}"
+        
+    try:
+        resp = httpx.post(
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers=headers,
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5
+            },
+            timeout=10.0
+        )
+        resp.raise_for_status()
+        return {"ok": True}
+    except Exception as e:
+        msg = str(e)
+        if isinstance(e, httpx.HTTPStatusError):
+            try:
+                msg = e.response.json().get("error", {}).get("message", msg)
+            except:
+                msg = e.response.text or msg
+        return {"ok": False, "status": getattr(e, "response", None) and getattr(e.response, "status_code", None), "message": msg}
 
 from fastapi.responses import FileResponse  # noqa: E402
 

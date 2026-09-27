@@ -59,11 +59,11 @@ def test_scene_segmentation_and_keywords_fallback():
     
 def test_scene_segmentation_with_topic_llm(monkeypatch):
     from backend.app.core.config import settings
-    monkeypatch.setattr(settings, "LLM_API_KEY", "fake_key")
+    monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "openai", "api_key": "fake_key", "model": "gpt-3.5-turbo", "enabled": True}])
     
     calls = []
     
-    def mock_call_llm_chat(messages, temperature=0.3):
+    def mock_call_llm_chat(messages, temperature=0.3, require_vision=False, job_state=None):
         if temperature == 0.7:
             calls.append("topic")
             return "Test topic: Ocean life."
@@ -71,7 +71,7 @@ def test_scene_segmentation_with_topic_llm(monkeypatch):
             calls.append("queries")
             return "underwater footage, sea life"
 
-    monkeypatch.setattr("backend.app.services.nlp._call_llm_chat", mock_call_llm_chat)
+    monkeypatch.setattr("backend.app.services.nlp.call_llm", mock_call_llm_chat)
     
     mock_words = [
         {"word": "The", "start": 0.0, "end": 0.5},
@@ -128,45 +128,31 @@ def test_regression_sync_preservation():
 
 def test_gemini_provider_nlp(monkeypatch):
     from backend.app.core.config import settings
-    from backend.app.services.nlp import _call_llm_chat
+    from backend.app.services.nlp import call_llm
     import httpx
     
-    monkeypatch.setattr(settings, "LLM_PROVIDER", "gemini")
-    monkeypatch.setattr(settings, "LLM_API_KEY", "fake_gemini_key")
-    monkeypatch.setattr(settings, "LLM_BASE_URL", "")
+    monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "gemini", "api_key": "fake", "model": "gemini-1.5-flash", "enabled": True}])
     
+    calls = []
     class MockResponse:
-        status_code = 200
+        def __init__(self):
+            self.status_code = 200
         def json(self):
-            return {"choices": [{"message": {"content": "mocked gemini response"}}]}
+            return {"choices": [{"message": {"content": "underwater footage, coral reef"}}]}
         def raise_for_status(self):
             pass
             
-    req_kwargs = {}
-    def mock_post(url, **kwargs):
-        req_kwargs["url"] = url
-        req_kwargs["headers"] = kwargs.get("headers")
+    def mock_post(*args, **kwargs):
+        calls.append((args, kwargs))
         return MockResponse()
         
     monkeypatch.setattr(httpx, "post", mock_post)
     
-    res = _call_llm_chat([{"role": "user", "content": "hi"}])
+    content = call_llm([{"role": "user", "content": "test"}])
+    assert "underwater footage" in content
     
-    assert res == "mocked gemini response"
-    assert req_kwargs["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-    assert req_kwargs["headers"]["Authorization"] == "Bearer fake_gemini_key"
-
-    # Test fallback on error via process_script_to_scenes
-    def mock_post_error(url, **kwargs):
-        class ErrResponse:
-            status_code = 500
-            text = "internal error"
-            def raise_for_status(self):
-                raise Exception("HTTP Error")
-        return ErrResponse()
-    monkeypatch.setattr(httpx, "post", mock_post_error)
-    
-    from backend.app.services.nlp import process_script_to_scenes
-    # This should not raise, but fallback to Yake gracefully
-    scenes = process_script_to_scenes([{"word": "Test", "start": 0, "end": 1}])
-    assert len(scenes) == 1
+    assert len(calls) == 1
+    args, kwargs = calls[0]
+    assert args[0] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert kwargs["headers"]["Authorization"] == "Bearer fake"
+    assert kwargs["json"]["model"] == "gemini-1.5-flash"

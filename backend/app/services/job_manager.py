@@ -32,6 +32,7 @@ class JobManager:
             "script": script,
             "timeline_path": None,
             "draft_video_path": None,
+            "llm_warning": None,
             "error": None,
             "logs": []
         }

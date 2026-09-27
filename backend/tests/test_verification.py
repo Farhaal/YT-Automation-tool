@@ -4,7 +4,9 @@ from unittest.mock import patch, MagicMock
 from backend.app.services.assets import AssetMetadata
 from backend.app.services.verification import verify_scene_candidates
 
-def test_verify_scene_candidates_success():
+def test_verify_scene_candidates_success(monkeypatch):
+    from backend.app.core.config import settings
+    monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "openai", "api_key": "dummy-key", "model": "dummy-model", "enabled": True}])
     candidates = [
         AssetMetadata(
             provider="dummy", provider_asset_id="1", asset_key="dummy:1", media_url="1", media_type="image",
@@ -24,9 +26,7 @@ def test_verify_scene_candidates_success():
         }
         mock_post.return_value = mock_resp
         
-        result = verify_scene_candidates(
-            "test scene", "topic", candidates, "dummy-key", "dummy-model"
-        )
+        result = verify_scene_candidates("test scene", "topic", candidates, job_state={})
         
         assert result is not None
         assert result["best_index"] == 1
@@ -37,28 +37,34 @@ def test_verify_scene_candidates_no_previews():
     candidates = [
         AssetMetadata(provider="dummy", provider_asset_id="1", asset_key="dummy:1", media_url="1", media_type="image")
     ]
-    result = verify_scene_candidates("test scene", "topic", candidates, "dummy-key", "dummy-model")
+    result = verify_scene_candidates("test scene", "topic", candidates, job_state={})
     assert result is None
 
-def test_verify_scene_candidates_http_error():
+def test_verify_scene_candidates_http_error(monkeypatch):
+    from backend.app.core.config import settings
+    monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "openai", "api_key": "dummy-key", "model": "dummy-model", "enabled": True}])
     candidates = [
         AssetMetadata(provider="dummy", provider_asset_id="1", asset_key="dummy:1", media_url="1", media_type="image", preview_image_url="x")
     ]
     with patch("httpx.post") as mock_post:
         mock_resp = MagicMock()
         mock_resp.status_code = 429
+        import httpx
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError("error", request=MagicMock(), response=mock_resp)
         mock_post.return_value = mock_resp
-        result = verify_scene_candidates("test scene", "topic", candidates, "dummy-key", "dummy-model")
+        result = verify_scene_candidates("test scene", "topic", candidates, job_state={})
         assert result is None
 
 def test_gemini_provider_verification(monkeypatch):
+    from backend.app.core.config import settings
+    monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "gemini", "api_key": "dummy-key", "model": "dummy-model", "enabled": True}])
     from backend.app.core.config import settings
     from backend.app.services.verification import verify_scene_candidates
     from backend.app.services.assets import AssetMetadata
     import httpx
     import base64
     
-    monkeypatch.setattr(settings, "LLM_PROVIDER", "gemini")
+    
     
     # Mock httpx.get for base64 image fetch
     def mock_get(url, **kwargs):
@@ -81,6 +87,8 @@ def test_gemini_provider_verification(monkeypatch):
             text = '{"best_index": 0, "score": 0.9, "reason": "good"}'
             def json(self):
                 return {"choices": [{"message": {"content": self.text}}]}
+            def raise_for_status(self):
+                pass
         return MockPostResp()
         
     monkeypatch.setattr(httpx, "post", mock_post)
@@ -91,12 +99,12 @@ def test_gemini_provider_verification(monkeypatch):
                      provider_asset_id="123", asset_key="123", media_url="url", media_type="mp4")
     ]
     
-    res = verify_scene_candidates("scene", "topic", candidates, "fake_gemini_key", "gemini-1.5-flash")
+    res = verify_scene_candidates("scene", "topic", candidates, job_state={})
     
     assert res is not None
     assert res["score"] == 0.9
     assert req_kwargs["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-    assert req_kwargs["headers"]["Authorization"] == "Bearer fake_gemini_key"
+    assert req_kwargs["headers"]["Authorization"] == "Bearer dummy-key"
     
     # Verify the image was converted to base64 inline
     messages = req_kwargs["json"]["messages"]
@@ -113,5 +121,5 @@ def test_gemini_provider_verification(monkeypatch):
         return ErrResp()
     monkeypatch.setattr(httpx, "post", mock_post_err)
     
-    res_err = verify_scene_candidates("scene", "topic", candidates, "fake_gemini_key", "gemini-1.5-flash")
+    res_err = verify_scene_candidates("scene", "topic", candidates, job_state={})
     assert res_err is None

@@ -7,6 +7,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
   const [aspectRatio, setAspectRatio] = useState('landscape');
   const [enableMotion, setEnableMotion] = useState('true');
   const [pace, setPace] = useState('balanced');
+  const [punchyHook, setPunchyHook] = useState('true');
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -24,7 +25,8 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
           script, 
           aspect_ratio: aspectRatio, 
           enable_motion: enableMotion === 'true',
-          pace
+          pace,
+          punchy_hook: punchyHook === 'true'
         })
       });
       if (!res.ok) throw new Error("Backend returned error");
@@ -47,6 +49,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
     fd.append('aspect_ratio', aspectRatio);
     fd.append('enable_motion', enableMotion);
     fd.append('pace', pace);
+    fd.append('punchy_hook', punchyHook);
     try {
       const res = await fetch('http://localhost:8000/generate/audio', {
         method: 'POST',
@@ -129,6 +132,17 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
                   { label: 'Relaxed', value: 'relaxed' },
                   { label: 'Balanced', value: 'balanced' },
                   { label: 'Dynamic', value: 'dynamic' }
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hook</label>
+              <SegmentedControl 
+                value={punchyHook}
+                onChange={setPunchyHook}
+                options={[
+                  { label: 'Punchy (30s)', value: 'true' },
+                  { label: 'Normal', value: 'false' }
                 ]}
               />
             </div>

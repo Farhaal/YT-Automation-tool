@@ -115,7 +115,7 @@ class AssetManager:
                         candidates.append(a)
         return candidates
 
-    def _rank_and_download(self, candidates, orientation, scene_duration, full_scene_query, scene_text="", topic=""):
+    def _rank_and_download(self, candidates, orientation, scene_duration, full_scene_query, scene_text="", topic="", job_state=None):
         from backend.app.core.config import settings
         from backend.app.services.verification import verify_scene_candidates
         
@@ -124,15 +124,14 @@ class AssetManager:
         backup_asset = None
         
         # --- VERIFICATION STEP ---
-        if settings.ENABLE_VISUAL_VERIFICATION and settings.LLM_API_KEY:
+        if settings.ENABLE_VISUAL_VERIFICATION:
             top_k = [c for c in ranked if c.preview_image_url][:4]
             if top_k:
                 verification_result = verify_scene_candidates(
                     scene_text=scene_text,
                     topic=topic,
                     candidates=top_k,
-                    api_key=settings.LLM_API_KEY,
-                    vision_model=settings.VISION_MODEL
+                    job_state=job_state
                 )
                 if verification_result:
                     best_idx = verification_result["best_index"]
@@ -165,7 +164,7 @@ class AssetManager:
                     break
         return best_asset, backup_asset
 
-    def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape") -> List[Dict[str, Any]]:  # noqa: E501
+    def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape", job_state: Optional[Dict] = None) -> List[Dict[str, Any]]:  # noqa: E501
         for scene in scenes:
             queries = scene.get("queries", [])
             if not queries:
@@ -185,7 +184,7 @@ class AssetManager:
                 if candidates:
                     best_asset, backup_asset = self._rank_and_download(
                         candidates, orientation, scene_duration, full_scene_query,
-                        scene_text=scene.get("text", ""), topic=scene.get("topic", "")
+                        scene_text=scene.get("text", ""), topic=scene.get("topic", ""), job_state=job_state
                     )
                 
                 # Phase 2: Slow Tier (only if fast tier yielded nothing usable)
@@ -194,7 +193,7 @@ class AssetManager:
                     if slow_candidates:
                         best_asset, backup_asset = self._rank_and_download(
                             slow_candidates, orientation, scene_duration, full_scene_query,
-                            scene_text=scene.get("text", ""), topic=scene.get("topic", "")
+                            scene_text=scene.get("text", ""), topic=scene.get("topic", ""), job_state=job_state
                         )
                 
                 # Early exit if we found a good asset

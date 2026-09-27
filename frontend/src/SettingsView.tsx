@@ -1,20 +1,29 @@
 import { useState, useEffect } from 'react';
-import { Key, Bot, Trash2 } from 'lucide-react';
-import { Card, Button, Badge, Input, useToast } from './ui';
+import { Card } from "./ui";
+import { Input } from "./ui";
+import { Button } from "./ui";
+import { Badge } from "./ui";
+import { Key, Bot, Trash2, ArrowUp, ArrowDown, Activity } from "lucide-react";
+import { useToast } from "./ui";
+
+const PROVIDER_NAMES: Record<string, string> = {
+  gemini: "Google (Gemini)",
+  openai: "OpenAI",
+  openrouter: "OpenRouter",
+  groq: "Groq",
+  ollama: "Ollama (Local)"
+};
 
 export default function SettingsView() {
   const [status, setStatus] = useState<any>({});
-  
   const [pexels, setPexels] = useState('');
   const [pixabay, setPixabay] = useState('');
   
-  const [llmProvider, setLlmProvider] = useState('');
-  const [llmApiKey, setLlmApiKey] = useState('');
-  const [llmModel, setLlmModel] = useState('');
-  const [llmBaseUrl, setLlmBaseUrl] = useState('');
-  
+  const [llmProviders, setLlmProviders] = useState<any[]>([]);
   const [enableVisualVerification, setEnableVisualVerification] = useState(false);
   const [visionModel, setVisionModel] = useState('');
+
+  const [testStatus, setTestStatus] = useState<Record<string, any>>({});
 
   const { toast } = useToast();
 
@@ -23,9 +32,25 @@ export default function SettingsView() {
       .then(r => r.json())
       .then(data => {
         setStatus(data);
-        if (data.llm_provider) setLlmProvider(data.llm_provider);
-        if (data.llm_model) setLlmModel(data.llm_model);
-        if (data.llm_base_url) setLlmBaseUrl(data.llm_base_url);
+        if (data.llm_providers) {
+          // Merge with default providers to ensure all cards exist
+          const loaded = data.llm_providers;
+          const loadedNames = loaded.map((p: any) => p.provider);
+          const defaults = [
+            { provider: "gemini", model: "gemini-2.0-flash", api_key: "", enabled: false, status: "Not configured" },
+            { provider: "openai", model: "gpt-4o-mini", api_key: "", enabled: false, status: "Not configured" },
+            { provider: "openrouter", model: "", api_key: "", enabled: false, status: "Not configured" },
+            { provider: "groq", model: "llama3-8b-8192", api_key: "", enabled: false, status: "Not configured" },
+            { provider: "ollama", model: "llama3", api_key: "", enabled: false, status: "Not configured" }
+          ];
+          const merged = [...loaded];
+          defaults.forEach(d => {
+            if (!loadedNames.includes(d.provider)) {
+              merged.push(d);
+            }
+          });
+          setLlmProviders(merged);
+        }
         if (data.enable_visual_verification !== undefined) setEnableVisualVerification(data.enable_visual_verification);
         if (data.vision_model) setVisionModel(data.vision_model);
       });
@@ -55,15 +80,18 @@ export default function SettingsView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          llm_provider: llmProvider,
-          llm_api_key: llmApiKey,
-          llm_model: llmModel,
-          llm_base_url: llmBaseUrl,
+          llm_providers: llmProviders.map(p => ({
+            provider: p.provider,
+            api_key: p.api_key || undefined,
+            model: p.model,
+            enabled: p.enabled
+          })),
           enable_visual_verification: enableVisualVerification,
           vision_model: visionModel
         })
       });
-      setLlmApiKey('');
+      // Clear inputted keys
+      setLlmProviders(prev => prev.map(p => ({...p, api_key: ""})));
       load();
       toast("LLM settings saved", "success");
     } catch {
@@ -73,16 +101,40 @@ export default function SettingsView() {
 
   const remove = async (provider: string) => {
     try {
-      await fetch(`http://localhost:8000/settings/${provider}`, { method: 'DELETE' });
-      if (provider === 'llm') {
-        setLlmProvider('');
-        setLlmModel('');
-        setLlmBaseUrl('');
-      }
+      await fetch("http://localhost:8000/settings/" + provider, { method: 'DELETE' });
       load();
-      toast(`Cleared ${provider} config`, "success");
+      toast("Cleared config", "success");
     } catch {
       toast("Error clearing config", "error");
+    }
+  };
+
+  const moveProvider = (index: number, dir: number) => {
+    if (index + dir < 0 || index + dir >= llmProviders.length) return;
+    const newProviders = [...llmProviders];
+    const temp = newProviders[index];
+    newProviders[index] = newProviders[index + dir];
+    newProviders[index + dir] = temp;
+    setLlmProviders(newProviders);
+  };
+
+  const testLlm = async (index: number) => {
+    const p = llmProviders[index];
+    setTestStatus(prev => ({...prev, [p.provider]: { loading: true }}));
+    try {
+      const res = await fetch('http://localhost:8000/settings/test-llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: p.provider, api_key: p.api_key || undefined, model: p.model })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTestStatus(prev => ({...prev, [p.provider]: { ok: true }}));
+      } else {
+        setTestStatus(prev => ({...prev, [p.provider]: { ok: false, msg: data.message, status: data.status }}));
+      }
+    } catch (e: any) {
+      setTestStatus(prev => ({...prev, [p.provider]: { ok: false, msg: e.message }}));
     }
   };
 
@@ -163,114 +215,122 @@ export default function SettingsView() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <Bot className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-xl text-foreground">AI Model (Optional)</h3>
+            <h3 className="font-bold text-xl text-foreground">AI Providers (Multi-Failover)</h3>
           </div>
+          
+          <p className="text-xs text-muted-foreground px-1">
+            The app tries enabled providers in order from top to bottom. It falls back on failure automatically.
+          </p>
 
-          <Card className="p-5 space-y-5">
-            <div className="flex justify-between items-center border-b pb-4">
-              <div>
-                <h4 className="font-semibold text-sm text-foreground">Topic-Aware Context</h4>
-                <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">Overrides the default NLP extractor for smarter visual queries.</p>
-              </div>
-              <Badge variant={status.llm_api_key === 'Configured' ? 'success' : 'default'}>
-                {status.llm_api_key === 'Configured' ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">Provider</label>
-                <select 
-                  value={llmProvider} 
-                  onChange={e => setLlmProvider(e.target.value)} 
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">-- Select --</option>
-                  <option value="gemini">Google (Gemini)</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="groq">Groq</option>
-                  <option value="ollama">Ollama (Local)</option>
-                </select>
-                {llmProvider === 'gemini' && (
-                  <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-                    Free key from Google AI Studio; Gemini Flash is vision-capable — great for clip verification.
-                  </p>
-                )}
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1.5">API Key</label>
-                <Input 
-                  type="password" 
-                  value={llmApiKey} 
-                  onChange={e => setLlmApiKey(e.target.value)} 
-                  placeholder={status.llm_api_key === 'Configured' ? '********' : 'sk-... (Optional for Ollama)'}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Model Override</label>
-                  <Input 
-                    type="text" 
-                    value={llmModel} 
-                    onChange={e => setLlmModel(e.target.value)} 
-                    placeholder="e.g. gpt-4o-mini"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">Base URL</label>
-                  <Input 
-                    type="text" 
-                    value={llmBaseUrl} 
-                    onChange={e => setLlmBaseUrl(e.target.value)} 
-                    placeholder="Custom endpoint"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 border-t pt-4">
-                <h4 className="font-semibold text-sm text-foreground mb-3">Visual Verification</h4>
-                
-                <div className="space-y-4">
-                  <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+          <div className="space-y-4">
+            {llmProviders.map((p, i) => (
+              <Card key={p.provider} className="p-4 relative">
+                <div className="flex items-center justify-between mb-3 border-b pb-2">
+                  <div className="flex items-center gap-3">
                     <input 
                       type="checkbox" 
-                      checked={enableVisualVerification} 
-                      onChange={e => setEnableVisualVerification(e.target.checked)}
-                      className="rounded border-input text-primary focus:ring-primary"
+                      checked={p.enabled} 
+                      onChange={e => {
+                        const next = [...llmProviders];
+                        next[i].enabled = e.target.checked;
+                        setLlmProviders(next);
+                      }}
+                      className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
                     />
-                    AI clip verification (accuracy) &mdash; uses a vision model via your OpenRouter key
-                  </label>
-
-                  {enableVisualVerification && (
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5">Vision Model</label>
-                      <Input 
-                        type="text" 
-                        value={visionModel} 
-                        onChange={e => setVisionModel(e.target.value)} 
-                        placeholder="e.g. google/gemini-2.0-flash-exp:free"
-                      />
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Default: google/gemini-2.0-flash-exp:free. Good alternatives: meta-llama/llama-3.2-11b-vision-instruct:free, openai/gpt-4o-mini
-                      </p>
-                    </div>
-                  )}
+                    <h4 className="font-semibold text-sm text-foreground">{PROVIDER_NAMES[p.provider] || p.provider}</h4>
+                    <span className="text-xs text-muted-foreground">Priority {i + 1}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => moveProvider(i, -1)} disabled={i === 0} className="h-6 w-6">
+                      <ArrowUp className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => moveProvider(i, 1)} disabled={i === llmProviders.length - 1} className="h-6 w-6">
+                      <ArrowDown className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button onClick={saveLlm} className="flex-1">Save Configuration</Button>
-                {status.llm_api_key === 'Configured' && (
-                  <Button variant="ghost" onClick={() => remove('llm')} className="px-3 text-red-500 hover:text-red-600 border border-input">
-                    <Trash2 className="w-4 h-4" />
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-foreground mb-1 uppercase tracking-wider">API Key</label>
+                    <Input 
+                      type="password" 
+                      value={p.api_key || ''} 
+                      onChange={e => {
+                        const next = [...llmProviders];
+                        next[i].api_key = e.target.value;
+                        setLlmProviders(next);
+                      }}
+                      placeholder={p.status === 'Configured' ? '********' : (p.provider === 'ollama' ? 'Optional' : 'sk-...')}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-foreground mb-1 uppercase tracking-wider">Model</label>
+                    <Input 
+                      type="text" 
+                      value={p.model || ''} 
+                      onChange={e => {
+                        const next = [...llmProviders];
+                        next[i].model = e.target.value;
+                        setLlmProviders(next);
+                      }}
+                      placeholder="Model name"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-muted">
+                  <Button variant="secondary" size="sm" onClick={() => testLlm(i)} disabled={testStatus[p.provider]?.loading} className="h-7 text-xs px-3">
+                    <Activity className="w-3 h-3 mr-1" /> Test
                   </Button>
+                  <div className="text-xs">
+                    {testStatus[p.provider]?.loading && <span className="text-muted-foreground animate-pulse">Testing...</span>}
+                    {testStatus[p.provider]?.ok === true && <span className="text-green-500 font-medium">? Works</span>}
+                    {testStatus[p.provider]?.ok === false && (
+                      <span className="text-red-500">? {testStatus[p.provider].status ? "HTTP " + testStatus[p.provider].status : "Error"}: {testStatus[p.provider].msg}</span>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+
+            <Card className="p-4 mt-6">
+              <h4 className="font-semibold text-sm text-foreground mb-3">Visual Verification</h4>
+              <div className="space-y-4">
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={enableVisualVerification} 
+                    onChange={e => setEnableVisualVerification(e.target.checked)}
+                    className="rounded border-input text-primary focus:ring-primary"
+                  />
+                  AI clip verification (accuracy)
+                </label>
+
+                {enableVisualVerification && (
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1.5">Vision Model</label>
+                    <Input 
+                      type="text" 
+                      value={visionModel} 
+                      onChange={e => setVisionModel(e.target.value)} 
+                      placeholder="e.g. google/gemini-2.0-flash-exp:free"
+                      className="text-xs"
+                    />
+                  </div>
                 )}
               </div>
+            </Card>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={saveLlm} className="flex-1">Save All LLM Settings</Button>
+              <Button variant="secondary" onClick={() => remove('llm')} className="px-4 text-red-500 hover:text-red-600">
+                Clear All
+              </Button>
             </div>
-          </Card>
+          </div>
         </div>
 
       </div>

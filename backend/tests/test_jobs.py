@@ -61,7 +61,7 @@ def test_job_orchestration(monkeypatch):
         assert str(audio_path).endswith("fake.wav")
         return {"words": [{"word": "fake", "start": 0, "end": 1}]}
         
-    def mock_segment(words, pace="balanced"):
+    def mock_segment(words, pace="balanced", job_state=None):
         called_stages.append("segment")
         return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
 
@@ -145,21 +145,21 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
     monkeypatch.setattr("backend.app.api.routes.SETTINGS_PATH", fake_settings_path)
     
     # Save original key to restore later
-    original_llm_key = settings.LLM_API_KEY
+    original_llm_key = getattr(settings, "LLM_PROVIDERS", [])
     
     try:
         # Write a fake settings file with an LLM key
         with open(fake_settings_path, "w") as f:
-            json.dump({"llm_api_key": "fake_llm_key_123"}, f)
+            json.dump({"llm_providers": [{"provider": "openai", "api_key": "fake_llm_key_123", "model": "test", "enabled": True}]}, f)
             
         called = []
         
         def mock_synthesize(text): return DATA / "tmp" / "fake.wav"
         def mock_transcribe(audio_path): return {"words": [{"word": "fake", "start": 0, "end": 1}]}
         
-        def mock_segment(words, pace="balanced"):
+        def mock_segment(words, pace="balanced", job_state=None):
             # By the time this runs, settings should have the LLM API key
-            assert settings.LLM_API_KEY == "fake_llm_key_123"
+            assert settings.LLM_PROVIDERS[0]["api_key"] == "fake_llm_key_123"
             called.append("segment_with_settings_applied")
             return [{"start": 0, "end": 1, "text": "fake", "asset": None}]
 
@@ -172,7 +172,7 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
         monkeypatch.setattr("backend.app.services.assets.manager.AssetManager.select_assets_for_scenes", lambda self, scenes, **kwargs: scenes)  # noqa: E501
         
         # Ensure settings is cleared out first so we know it loaded from file
-        settings.LLM_API_KEY = ""
+        settings.LLM_PROVIDERS = []
 
         # Trigger script flow
         res = client.post("/generate/script", json={"script": "Test settings order"})
@@ -181,4 +181,4 @@ def test_pipeline_applies_settings_before_nlp(monkeypatch, tmp_path):
         assert "segment_with_settings_applied" in called
     finally:
         # Restore original LLM key
-        settings.LLM_API_KEY = original_llm_key
+        settings.LLM_PROVIDERS = original_llm_key

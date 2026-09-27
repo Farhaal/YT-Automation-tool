@@ -1,24 +1,9 @@
-import json
-import httpx
-import base64
-from typing import List, Optional, Dict
+import re
 
-from backend.app.core.logger import logger
-from backend.app.services.assets import AssetMetadata
-from backend.app.core.config import settings
+with open('backend/app/services/verification.py', 'r') as f:
+    content = f.read()
 
-def _fetch_image_base64(url: str) -> Optional[str]:
-    try:
-        resp = httpx.get(url, timeout=5.0)
-        if resp.status_code == 200:
-            ctype = resp.headers.get("content-type", "image/jpeg")
-            b64 = base64.b64encode(resp.content).decode("utf-8")
-            return f"data:{ctype};base64,{b64}"
-    except Exception:
-        pass
-    return None
-
-def verify_scene_candidates(
+replacement = '''def verify_scene_candidates(
     scene_text: str,
     topic: str,
     candidates: List[AssetMetadata],
@@ -39,19 +24,19 @@ def verify_scene_candidates(
     system_prompt = (
         "You are an AI video editor selecting the best stock footage for a video scene. "
         "You will be given the overall video topic, the specific scene text, and several image thumbnails "
-        "representing video/image candidates.\n\n"
+        "representing video/image candidates.\\n\\n"
         "Your task: evaluate which image BEST visually matches the meaning and tone of the scene text. "
-        "Return STRICTLY a JSON object with this exact schema (no markdown, no quotes around the json):\n"
-        "{\n"
-        '  "best_index": <int>,\n'
-        '  "score": <float between 0.0 and 1.0, where 1.0 is perfect match>,\n'
-        '  "reason": "<str: brief 1-sentence explanation of why it fits>"\n'
+        "Return STRICTLY a JSON object with this exact schema (no markdown, no quotes around the json):\\n"
+        "{\\n"
+        '  "best_index": <int>,\\n'
+        '  "score": <float between 0.0 and 1.0, where 1.0 is perfect match>,\\n'
+        '  "reason": "<str: brief 1-sentence explanation of why it fits>"\\n'
         "}"
     )
 
     # We will base64 all verifiable thumbnails so they work for Gemini as well as any other provider.
     content_payload = [
-        {"type": "text", "text": f"Video Topic: {topic}\nScene Text: {scene_text}\n\nCandidates:"}
+        {"type": "text", "text": f"Video Topic: {topic}\\nScene Text: {scene_text}\\n\\nCandidates:"}
     ]
 
     for i, c in enumerate(verifiable):
@@ -74,11 +59,11 @@ def verify_scene_candidates(
         
         # Strip potential markdown blocks if the model ignored response_format
         result_text = result_text.strip()
-        if result_text.startswith("```json"):
+        if result_text.startswith("`json"):
             result_text = result_text[7:]
-        if result_text.startswith("```"):
+        if result_text.startswith("`"):
             result_text = result_text[3:]
-        if result_text.endswith("```"):
+        if result_text.endswith("`"):
             result_text = result_text[:-3]
             
         result = json.loads(result_text.strip())
@@ -104,3 +89,10 @@ def verify_scene_candidates(
     except Exception as e:
         logger.warning(f"Exception during vision verification: {type(e).__name__} - {e}")
         return None
+'''
+
+start_pattern = r'def verify_scene_candidates\(.*?\)\s*->\s*Optional\[Dict\]:'
+new_content = re.sub(start_pattern + r'.*?return None', replacement, content, flags=re.DOTALL)
+
+with open('backend/app/services/verification.py', 'w') as f:
+    f.write(new_content)
