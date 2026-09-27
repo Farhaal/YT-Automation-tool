@@ -1,22 +1,35 @@
 import json
 import httpx
+import base64
 from typing import List, Optional, Dict
 
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
+from backend.app.core.config import settings
+
+def _fetch_image_base64(url: str) -> Optional[str]:
+    try:
+        resp = httpx.get(url, timeout=5.0)
+        if resp.status_code == 200:
+            ctype = resp.headers.get("content-type", "image/jpeg")
+            b64 = base64.b64encode(resp.content).decode("utf-8")
+            return f"data:{ctype};base64,{b64}"
+    except Exception:
+        pass
+    return None
 
 def verify_scene_candidates(
     scene_text: str,
     topic: str,
     candidates: List[AssetMetadata],
-    openrouter_key: str,
+    api_key: str,
     vision_model: str
 ) -> Optional[Dict]:
     """
     Calls OpenRouter vision model to score and pick the best image candidate for a scene.
     Returns: {"best_index": int, "score": float, "reason": str} or None on any failure.
     """
-    if not openrouter_key or not vision_model or not candidates:
+    if not api_key or not vision_model or not candidates:
         return None
 
     # Filter candidates to only those with previews
@@ -37,13 +50,21 @@ def verify_scene_candidates(
         "}"
     )
 
+    provider = (settings.LLM_PROVIDER or "").lower()
+    is_gemini = provider in ["gemini", "google"]
+    
     content = [
         {"type": "text", "text": f"Video Topic: {topic}\nScene Text: {scene_text}\n\nCandidates:"}
     ]
 
     for i, c in enumerate(verifiable):
         content.append({"type": "text", "text": f"Candidate {i}:"})
-        content.append({"type": "image_url", "image_url": {"url": c.preview_image_url}})
+        img_url = c.preview_image_url
+        if is_gemini:
+            b64_url = _fetch_image_base64(c.preview_image_url)
+            if b64_url:
+                img_url = b64_url
+        content.append({"type": "image_url", "image_url": {"url": img_url}})
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -51,13 +72,28 @@ def verify_scene_candidates(
     ]
 
     try:
+        base_url = "https://openrouter.ai/api/v1/chat/completions"
+        if is_gemini:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        elif provider == "openai":
+            base_url = "https://api.openai.com/v1/chat/completions"
+        elif provider == "groq":
+            base_url = "https://api.groq.com/openai/v1/chat/completions"
+        elif provider == "ollama":
+            base_url = f"{settings.OLLAMA_URL.rstrip('/')}/v1/chat/completions"
+        elif settings.LLM_BASE_URL:
+            base_url = f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/Farhaal/YT-Automation-tool",
+            "X-Title": "OpenReel",
+            "Content-Type": "application/json"
+        }
+
         resp = httpx.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {openrouter_key}",
-                "HTTP-Referer": "https://github.com/Farhaal/YT-Automation-tool",
-                "X-Title": "OpenReel"
-            },
+            base_url,
+            headers=headers,
             json={
                 "model": vision_model,
                 "messages": messages,

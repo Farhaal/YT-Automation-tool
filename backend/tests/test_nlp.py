@@ -125,3 +125,48 @@ def test_regression_sync_preservation():
             if i < len(scenes) - 1:
                 dur = s["end"] - s["start"]
                 assert dur >= min_dur, f"Scene {i} duration {dur} < {min_dur} at max_d {max_d}"
+
+def test_gemini_provider_nlp(monkeypatch):
+    from backend.app.core.config import settings
+    from backend.app.services.nlp import _call_llm_chat
+    import httpx
+    
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "gemini")
+    monkeypatch.setattr(settings, "LLM_API_KEY", "fake_gemini_key")
+    monkeypatch.setattr(settings, "LLM_BASE_URL", "")
+    
+    class MockResponse:
+        status_code = 200
+        def json(self):
+            return {"choices": [{"message": {"content": "mocked gemini response"}}]}
+        def raise_for_status(self):
+            pass
+            
+    req_kwargs = {}
+    def mock_post(url, **kwargs):
+        req_kwargs["url"] = url
+        req_kwargs["headers"] = kwargs.get("headers")
+        return MockResponse()
+        
+    monkeypatch.setattr(httpx, "post", mock_post)
+    
+    res = _call_llm_chat([{"role": "user", "content": "hi"}])
+    
+    assert res == "mocked gemini response"
+    assert req_kwargs["url"] == "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    assert req_kwargs["headers"]["Authorization"] == "Bearer fake_gemini_key"
+
+    # Test fallback on error via process_script_to_scenes
+    def mock_post_error(url, **kwargs):
+        class ErrResponse:
+            status_code = 500
+            text = "internal error"
+            def raise_for_status(self):
+                raise Exception("HTTP Error")
+        return ErrResponse()
+    monkeypatch.setattr(httpx, "post", mock_post_error)
+    
+    from backend.app.services.nlp import process_script_to_scenes
+    # This should not raise, but fallback to Yake gracefully
+    scenes = process_script_to_scenes([{"word": "Test", "start": 0, "end": 1}])
+    assert len(scenes) == 1

@@ -131,7 +131,7 @@ class AssetManager:
                     scene_text=scene_text,
                     topic=topic,
                     candidates=top_k,
-                    openrouter_key=settings.LLM_API_KEY,
+                    api_key=settings.LLM_API_KEY,
                     vision_model=settings.VISION_MODEL
                 )
                 if verification_result:

@@ -186,11 +186,17 @@ export default function SettingsView() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">-- Select --</option>
+                  <option value="gemini">Google (Gemini)</option>
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
                   <option value="groq">Groq</option>
                   <option value="ollama">Ollama (Local)</option>
                 </select>
+                {llmProvider === 'gemini' && (
+                  <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                    Free key from Google AI Studio; Gemini Flash is vision-capable — great for clip verification.
+                  </p>
+                )}
               </div>
               
               <div>

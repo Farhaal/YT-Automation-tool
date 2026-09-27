@@ -129,6 +129,9 @@ def _call_llm_chat(messages: List[Dict], temperature: float = 0.3) -> str:
         elif provider == "ollama":
             base_url = f"{settings.OLLAMA_URL.rstrip('/')}/v1"
             model = settings.LLM_MODEL or "llama3"
+        elif provider in ["gemini", "google"]:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            model = settings.LLM_MODEL or "gemini-1.5-flash"
         else:
             base_url = "https://api.openai.com/v1"
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added "Google (Gemini)" as a first-class LLM provider using the OpenAI-compatible endpoint. Gemini Flash is fully supported for both topic-aware visual queries and AI clip verification, leveraging inline base64 image encoding for accurate multimodal thumbnail inspections.
 - Added optional AI visual verification to intelligently rank stock footage candidates by allowing an OpenRouter Vision model (like `google/gemini-2.0-flash-exp:free`) to inspect clip thumbnails and compare them to the scene text, ensuring significantly higher thematic accuracy than keyword search alone.
 - Implemented OpenTimelineIO (OTIO) integration to export the assembled timeline into native NLE formats. Supports generating target-specific `project.fcpxml` and `timeline.edl` for DaVinci Resolve and Premiere Pro, and structured media bundles for CapCut.
 - Enhanced the timeline exporter to output pre-cut, perfectly timed contiguous clips using `ffmpeg`. Editors (like CapCut) can now drop the clips sequentially into a timeline and they will automatically sync to the narration without manual trimming.
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wikimedia Commons is now treated exclusively as a fallback provider for unfilled gaps to improve quality and speed, and its search queries now utilize relevance sorting.
 
 ### Added
+- Added "Google (Gemini)" as a first-class LLM provider using the OpenAI-compatible endpoint. Gemini Flash is fully supported for both topic-aware visual queries and AI clip verification, leveraging inline base64 image encoding for accurate multimodal thumbnail inspections.
 - Added optional user-provided LLM API key support (OpenAI-compatible) in Settings for smarter visual query extraction, with automatic fallback to local NLP.
 - Support for selecting video aspect ratio (16:9 Landscape, 9:16 Portrait, 1:1 Square) in the frontend.
 - Added UI toggle to disable Ken Burns motion for faster video generation.
@@ -50,5 +52,6 @@ When you cut a release, move items from [Unreleased] into a new version section,
 
 ## [0.2.0] - 2026-10-01
 ### Added
+- Added "Google (Gemini)" as a first-class LLM provider using the OpenAI-compatible endpoint. Gemini Flash is fully supported for both topic-aware visual queries and AI clip verification, leveraging inline base64 image encoding for accurate multimodal thumbnail inspections.
 - Word-level transcription and alignment (sync core).
 -->

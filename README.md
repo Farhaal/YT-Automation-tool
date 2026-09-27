@@ -119,7 +119,9 @@ Pexels and Pixabay require free API keys. These are completely optional, user-ow
 Openverse and Wikimedia Commons do not require any API keys and will work out-of-the-box.
 
 ### Optional AI Model Key
-For smarter visual search query extraction, you can optionally provide an LLM API key (OpenAI, OpenRouter, Groq, or local Ollama) in the Settings page. When configured, OpenReel performs a two-stage topic-aware analysis: it first summarizes the overall visual subject of your transcript, and then uses that context to generate highly accurate, on-topic search queries for each scene. If you don't provide a key, OpenReel falls back to a fast, built-in NLP keyword extractor (spaCy + YAKE). Your API keys are kept strictly local.
+For smarter visual search query extraction, you can optionally provide an LLM API key (Google Gemini, OpenAI, OpenRouter, Groq, or local Ollama) in the Settings page. When configured, OpenReel performs a two-stage topic-aware analysis: it first summarizes the overall visual subject of your transcript, and then uses that context to generate highly accurate, on-topic search queries for each scene. If you don't provide a key, OpenReel falls back to a fast, built-in NLP keyword extractor (spaCy + YAKE). Your API keys are kept strictly local.
+
+> **Tip:** You can get a free, highly capable vision API key from [Google AI Studio](https://aistudio.google.com/) and use the **Google (Gemini)** provider. Gemini Flash is exceptionally good for both queries and visual clip verification.
 
 ## Performance & Model Size
 
