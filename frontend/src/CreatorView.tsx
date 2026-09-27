@@ -6,6 +6,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
   const [script, setScript] = useState('');
   const [aspectRatio, setAspectRatio] = useState('landscape');
   const [enableMotion, setEnableMotion] = useState('true');
+  const [pace, setPace] = useState('balanced');
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -22,7 +23,8 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
         body: JSON.stringify({ 
           script, 
           aspect_ratio: aspectRatio, 
-          enable_motion: enableMotion === 'true' 
+          enable_motion: enableMotion === 'true',
+          pace
         })
       });
       if (!res.ok) throw new Error("Backend returned error");
@@ -44,6 +46,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
     fd.append('audio_file', file);
     fd.append('aspect_ratio', aspectRatio);
     fd.append('enable_motion', enableMotion);
+    fd.append('pace', pace);
     try {
       const res = await fetch('http://localhost:8000/generate/audio', {
         method: 'POST',
@@ -93,7 +96,7 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
             </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-6">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Format</label>
               <SegmentedControl 
@@ -114,6 +117,18 @@ export default function CreatorView({ onJobCreated }: { onJobCreated: (id: strin
                 options={[
                   { label: 'Enabled', value: 'true' },
                   { label: 'Disabled', value: 'false' }
+                ]}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pace</label>
+              <SegmentedControl 
+                value={pace}
+                onChange={setPace}
+                options={[
+                  { label: 'Relaxed', value: 'relaxed' },
+                  { label: 'Balanced', value: 'balanced' },
+                  { label: 'Dynamic', value: 'dynamic' }
                 ]}
               />
             </div>
