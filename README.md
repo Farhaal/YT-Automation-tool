@@ -79,7 +79,7 @@ When an OpenRouter key is configured, you can enable **AI clip verification** in
 - **OS:** Windows or macOS (Linux works too)
 - **Python 3.11+**
 - **Node.js 20+**
-- **GPU (optional):** an NVIDIA RTX with recent drivers/CUDA speeds up transcription and encoding.
+- **GPU (optional):** an NVIDIA RTX with recent drivers speeds up transcription and encoding. (The required CUDA runtime libraries for Windows are automatically fetched when you install requirements.txt).
 
 ## Quickstart (Windows PowerShell)
 

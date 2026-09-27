@@ -1,5 +1,24 @@
 from typing import Any, Dict
 
+import os
+import sys
+
+if sys.platform == "win32":
+    try:
+        import site
+        sp_dirs = []
+        if hasattr(site, 'getsitepackages'):
+            sp_dirs.extend(site.getsitepackages())
+        sp_dirs.append(os.path.join(sys.prefix, 'Lib', 'site-packages'))
+        
+        for sp in set(sp_dirs):
+            for lib in ["cublas", "cudnn"]:
+                bin_dir = os.path.join(sp, "nvidia", lib, "bin")
+                if os.path.exists(bin_dir):
+                    os.add_dll_directory(bin_dir)
+    except Exception:
+        pass
+
 import ctranslate2
 from faster_whisper import WhisperModel
 
@@ -42,7 +61,7 @@ def get_transcription_model() -> WhisperModel:
                 compute_type=compute_type,
                 download_root=download_root
             )
-            logger.info("Whisper model loaded successfully.")
+            logger.info(f"Whisper model loaded successfully. Using {device} {compute_type}.")
         except RuntimeError as e:
             if device == "cuda" and settings.DEVICE == "auto":
                 logger.warning(f"Failed to load Whisper on CUDA ({e}). Falling back to CPU...")
@@ -54,7 +73,7 @@ def get_transcription_model() -> WhisperModel:
                     compute_type=compute_type,
                     download_root=download_root
                 )
-                logger.info("Whisper model loaded successfully on CPU fallback.")
+                logger.info(f"Whisper model loaded successfully on CPU fallback. Using {device} {compute_type}.")
             else:
                 raise
 

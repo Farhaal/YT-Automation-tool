@@ -104,3 +104,5 @@ _One line per work session or completed phase, newest at the bottom._
 - 2026-09-14: Enhanced exporter to generate pre-cut contiguous media assets via FFmpeg for plug-and-play drop-in sync in CapCut.
 - 2026-09-14: Made the heavy draft rendering optional and repositioned UI actions around an export-first workflow. Users can now view inline previews immediately without rendering.
 - 2026-09-14: Added optional AI visual verification to intelligently rank stock footage candidates by allowing an OpenRouter Vision model to inspect clip thumbnails and compare them to the scene text.- 2026-09-28: Added Google Gemini (OpenAI-compatible) as a first-class LLM provider for both visual-query extraction and clip verification, with inline base64 image encoding support.
+
+- 2026-09-28: Implemented multi-provider LLM failover, punchy hook pacing option, and fixed CUDA runtime discovery for Whisper transcription on Windows by adding DLL path injection.
