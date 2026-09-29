@@ -127,3 +127,9 @@ AGENTS.local.md
 #  it, but is NOT part of the shipped product.
 # ─────────────────────────────────────────────────────────
 dev/
+
+# scratch patch scripts (never commit)
+/fix*.py
+/patch*.py
+/simple_patch.py
+/safe_patch*.py
