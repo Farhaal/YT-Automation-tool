@@ -1,17 +1,14 @@
-# OpenReel — Python dependencies
+# OpenReel — Python dependencies  (Python 3.11 recommended; 3.12 also works)
 # ---------------------------------------------------------------------------
-# Install into a PROJECT-LOCAL virtual environment (.venv) so nothing lands in
-# your system Python. Same steps on Windows and macOS:
+# Install into a project-local virtual environment (.venv):
 #
-#   Windows (PowerShell):  python  -m venv .venv;  .venv\Scripts\Activate.ps1
-#   macOS / Linux:         python3 -m venv .venv;  source .venv/bin/activate
+#   Windows (PowerShell):  python -m venv .venv ; .\.venv\Scripts\Activate.ps1
+#   macOS / Linux:         python3 -m venv .venv ; source .venv/bin/activate
 #   Then (both):           pip install -r requirements.txt
 #                          python -m spacy download en_core_web_sm
 #
-# This baseline runs 100% on CPU and behaves the same on Windows and macOS.
-# It automatically uses an NVIDIA RTX GPU for transcription when CUDA is present.
-# Optional higher-quality / GPU-only extras are listed at the bottom (commented)
-# and documented in BLUEPRINT.md — install them only when you want them.
+# Also required on your system (not installable with pip): FFmpeg, including
+# ffprobe, available on your PATH. See README.md -> "What you need".
 # ---------------------------------------------------------------------------
 
 # ---- Web API ----
@@ -22,50 +19,39 @@ pydantic>=2.7
 pydantic-settings>=2.3
 python-dotenv>=1.0
 
-# ---- HTTP clients (free stock-media APIs) ----
+# ---- HTTP clients (stock-media and AI provider APIs) ----
 httpx>=0.27
 requests>=2.32
 
-# ---- Speech-to-text + word-level timestamps ----
-# CTranslate2-based: CPU on every OS, auto-GPU on NVIDIA. No PyTorch required.
+# ---- Speech-to-text with word-level timestamps ----
+# CTranslate2-based: runs on CPU everywhere, uses an NVIDIA GPU when available.
 faster-whisper>=1.0.3
 
-# ---- Text-to-speech (offline, cross-platform baseline) ----
-# Uses SAPI5 on Windows and NSSpeechSynthesizer on macOS — no model download.
-# Higher-quality neural voices (Piper / Kokoro) are optional upgrades below.
+# ---- Text-to-speech (only used for the "type a script" flow) ----
+# Windows: SAPI5, macOS: NSSpeechSynthesizer, Linux: needs `espeak-ng` installed.
 pyttsx3>=2.90
 
-# ---- NLP: scene keywords (lightweight, no heavy ML) ----
+# ---- Scene keywords ----
 spacy>=3.7
 yake>=0.4.8
 
+# ---- Timeline validation and editor export ----
+jsonschema>=4.0.0
+opentimelineio==0.16.0
+
 # ---- Video rendering ----
-# imageio-ffmpeg bundles an ffmpeg binary, so nothing extra is needed to start.
-# For fast NVENC GPU encoding, install a system ffmpeg with nvenc (see docs).
 moviepy>=2.0
 imageio>=2.34
 imageio-ffmpeg>=0.5.1
 Pillow>=10.3
 numpy>=1.26
 
-# ---- Logging niceties ----
+# ---- Logging ----
 rich>=13.7
 
-# ---------------------------------------------------------------------------
-# OPTIONAL UPGRADES — do NOT uncomment unless you want them. Some pull large
-# downloads or GPU-only wheels. See BLUEPRINT.md "License watch" first.
-#
-#   Tighter word alignment:      whisperx
-#   Neural TTS voices:           piper-tts            (or) kokoro-onnx  onnxruntime
-#   Smarter keyword embeddings:  keybert  sentence-transformers
-#   Semantic asset matching:     open-clip-torch  torch    (CLIP re-ranking)
-#   Asset upscaling (NVIDIA):    realesrgan  torch  torchvision
-#   NVIDIA transcription libs:   nvidia-cublas-cu12  nvidia-cudnn-cu12
-# ---------------------------------------------------------------------------
-jsonschema>=4.0.0
-opentimelineio==0.16.0
-
-
-# GPU Acceleration for Whisper on Windows
-nvidia-cublas-cu12; sys_platform != "darwin"
-nvidia-cudnn-cu12; sys_platform != "darwin"
+# ---- GPU acceleration for transcription (Windows + NVIDIA) ----
+# Installed automatically on Windows and loaded at runtime. Harmless without an
+# NVIDIA GPU (transcription falls back to CPU). On Linux, install these manually
+# and set LD_LIBRARY_PATH if you want GPU transcription (see README).
+nvidia-cublas-cu12; sys_platform == "win32"
+nvidia-cudnn-cu12; sys_platform == "win32"

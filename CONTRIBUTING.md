@@ -8,41 +8,47 @@ all sizes are welcome — bug reports, docs, new asset providers, effects, and f
 - Report bugs or request features via Issues (include your OS and steps to reproduce).
 - Improve documentation.
 - Add a new free asset provider, transition/effect, caption style, or language.
-- Tackle an item from the roadmap in `BLUEPRINT.md`.
+- Tackle an item from the Roadmap in `README.md`.
 
 Please open an issue to discuss substantial changes before starting, so we can agree on
 the approach.
 
 ## Development setup
 
-Works the same on Windows and macOS. From the repo root:
+Follow the setup steps in [README.md](README.md) (Python 3.11, Node.js 22 LTS, FFmpeg),
+then install the dev tools:
 
 ```bash
-# Backend (Python 3.11+)
-# Windows (PowerShell):
-python  -m venv .venv;  .venv\Scripts\Activate.ps1
-# macOS / Linux:
-python3 -m venv .venv && source .venv/bin/activate
-
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-
-# Frontend (Node 20+, added in the frontend phase)
-cd frontend && npm install
+pip install pytest ruff
 ```
 
-Copy `.env.example` to `.env` and add your free Pexels / Pixabay keys.
-
-Keep everything project-local: the virtual environment lives in `.venv/`, and models and
-caches are written under the project folder (see `BLUEPRINT.md`). Nothing should be
+Keep everything project-local: the virtual environment lives in `.venv/`, and models,
+caches, jobs and settings are written under `data/` (git-ignored). Nothing should be
 installed globally or written outside the repo.
+
+## Checks to run before committing
+
+```bash
+ruff check .          # Python lint
+pytest                # backend tests
+
+cd frontend
+npm run lint          # frontend lint (oxlint)
+npm run test          # frontend tests (vitest)
+npm run build         # type-check and build
+```
+
+The same checks run in CI on every push.
 
 ## Coding standards
 
-- Python: format with `black`, lint with `ruff`, type-check with `mypy`. Add `pytest` tests
-  for new logic.
-- Frontend: `prettier` + `eslint`; add `vitest` tests where practical.
+- Python: lint with `ruff` (config in `pyproject.toml`). Add `pytest` tests for new logic;
+  tests must not use real API keys, the network, or the real `data/` folder.
+- Frontend: TypeScript + `oxlint`; add `vitest` tests where practical.
 - Keep functions small and typed. Comments explain *why*, not *what*.
+- Edit `requirements.txt` as plain UTF-8 in your editor — don't append to it with shell
+  redirection (`>>` in Windows PowerShell writes UTF-16 and breaks `pip install`).
+- Never commit throwaway helper scripts, API keys, `.env`, or anything under `data/`.
 
 ## Commits and pull requests
 
