@@ -62,9 +62,9 @@ class TimelineAssembler:
             if transition:
                 timeline_scene["transition_out"] = transition
                 
-            if "match_score" in scene: timeline_scene["match_score"] = scene["match_score"]
-            if "match_reason" in scene: timeline_scene["match_reason"] = scene["match_reason"]
-            if "needs_review" in scene: timeline_scene["needs_review"] = scene["needs_review"]
+            for key in ("match_score", "match_reason", "needs_review"):
+                if key in scene:
+                    timeline_scene[key] = scene[key]
                 
             timeline_scenes.append(timeline_scene)
             

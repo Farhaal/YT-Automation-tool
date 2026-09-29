@@ -2,6 +2,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+
 import opentimelineio as otio
 from opentimelineio.opentime import RationalTime, TimeRange
 
@@ -59,7 +60,7 @@ def process_asset(in_path: Path, out_path: Path, is_video: bool, width: int, hei
 def generate_filler(out_path: Path, width: int, height: int, fps: float, dur: float):
     cmd = [
         "ffmpeg", "-y", "-f", "lavfi",
-        f"-i", f"color=c=black:s={width}x{height}:r={fps}",
+        "-i", f"color=c=black:s={width}x{height}:r={fps}",
         "-t", str(dur), "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path)
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -1,12 +1,13 @@
 import json
-import shutil
-import zipfile
 import subprocess
+import zipfile
 from pathlib import Path
-import pytest
-import opentimelineio as otio
 
-from backend.app.services.exporter import export_project, build_otio_timeline
+import opentimelineio as otio
+import pytest
+
+from backend.app.services.exporter import build_otio_timeline, export_project
+
 
 def get_video_duration(path: Path) -> float:
     cmd = [
@@ -64,8 +65,8 @@ def mock_timeline_env(tmp_path):
 
 def test_export_precut_durations(mock_timeline_env, monkeypatch):
     timeline_path, tmp_path = mock_timeline_env
-    from backend.app.core import paths
     import backend.app.services.exporter as exporter
+    from backend.app.core import paths
     monkeypatch.setattr(paths, "DATA", tmp_path)
     monkeypatch.setattr(exporter, "DATA", tmp_path)
 

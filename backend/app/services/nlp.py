@@ -191,7 +191,7 @@ def call_llm(messages: List[Dict], temperature: float = 0.3, require_vision: boo
                 if isinstance(e, httpx.HTTPStatusError):
                     try:
                         msg = e.response.json().get("error", {}).get("message", msg)
-                    except:
+                    except Exception:
                         msg = e.response.text or msg
                         
                 last_err_msg = msg

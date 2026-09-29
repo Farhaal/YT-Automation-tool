@@ -1,7 +1,6 @@
-from typing import Any, Dict
-
 import os
 import sys
+from typing import Any, Dict
 
 if sys.platform == "win32":
     try:

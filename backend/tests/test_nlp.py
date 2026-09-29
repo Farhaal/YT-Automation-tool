@@ -1,5 +1,6 @@
 from backend.app.services.nlp import process_script_to_scenes, segment_into_scenes
 
+
 def test_scene_segmentation():
     # 1. Empty input
     assert segment_into_scenes([]) == []
@@ -127,9 +128,10 @@ def test_regression_sync_preservation():
                 assert dur >= min_dur, f"Scene {i} duration {dur} < {min_dur} at max_d {max_d}"
 
 def test_gemini_provider_nlp(monkeypatch):
+    import httpx
+
     from backend.app.core.config import settings
     from backend.app.services.nlp import call_llm
-    import httpx
     
     monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "gemini", "api_key": "fake", "model": "gemini-1.5-flash", "enabled": True}])
     

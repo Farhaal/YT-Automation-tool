@@ -1,11 +1,12 @@
-import json
-import httpx
 import base64
-from typing import List, Optional, Dict
+import json
+from typing import Dict, List, Optional
+
+import httpx
 
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.core.config import settings
+
 
 def _fetch_image_base64(url: str) -> Optional[str]:
     try:
@@ -67,7 +68,7 @@ def verify_scene_candidates(
         {"role": "user", "content": content_payload}
     ]
 
-    from backend.app.services.nlp import call_llm, AllProvidersFailed
+    from backend.app.services.nlp import AllProvidersFailed, call_llm
     
     try:
         result_text = call_llm(messages, temperature=0.1, require_vision=True, job_state=job_state)

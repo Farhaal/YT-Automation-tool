@@ -1,8 +1,8 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from backend.app.services.assets import AssetMetadata
 from backend.app.services.verification import verify_scene_candidates
+
 
 def test_verify_scene_candidates_success(monkeypatch):
     from backend.app.core.config import settings
@@ -58,11 +58,13 @@ def test_verify_scene_candidates_http_error(monkeypatch):
 def test_gemini_provider_verification(monkeypatch):
     from backend.app.core.config import settings
     monkeypatch.setattr(settings, "LLM_PROVIDERS", [{"provider": "gemini", "api_key": "dummy-key", "model": "dummy-model", "enabled": True}])
-    from backend.app.core.config import settings
-    from backend.app.services.verification import verify_scene_candidates
-    from backend.app.services.assets import AssetMetadata
-    import httpx
     import base64
+
+    import httpx
+
+    from backend.app.core.config import settings
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.verification import verify_scene_candidates
     
     
     

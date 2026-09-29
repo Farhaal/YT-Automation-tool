@@ -1,6 +1,5 @@
 import asyncio
 import json
-import shutil
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -72,8 +71,10 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         
         s = load_settings()
         import os
-        if s.get("pexels_key"): os.environ["PEXELS_API_KEY"] = s["pexels_key"]
-        if s.get("pixabay_key"): os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
+        if s.get("pexels_key"):
+            os.environ["PEXELS_API_KEY"] = s["pexels_key"]
+        if s.get("pixabay_key"):
+            os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
         
         asset_manager = AssetManager(cache_dir=DATA / "assets")
         scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio, job_state=job_state)
@@ -346,7 +347,7 @@ def load_settings():
                 base_settings["pixabay_key"] = saved.get("pixabay_key", base_settings["pixabay_key"])
                 base_settings["enable_visual_verification"] = saved.get("enable_visual_verification", base_settings["enable_visual_verification"])
                 base_settings["vision_model"] = saved.get("vision_model", base_settings["vision_model"])
-        except:
+        except Exception:
             pass
     return base_settings
 
@@ -382,12 +383,16 @@ def get_settings():
 @router.post("/settings")
 def update_settings(req: SettingsUpdate):
     s = load_settings()
-    if req.pexels_key is not None and req.pexels_key != "": s["pexels_key"] = req.pexels_key
-    if req.pixabay_key is not None and req.pixabay_key != "": s["pixabay_key"] = req.pixabay_key
+    if req.pexels_key is not None and req.pexels_key != "":
+        s["pexels_key"] = req.pexels_key
+    if req.pixabay_key is not None and req.pixabay_key != "":
+        s["pixabay_key"] = req.pixabay_key
     if req.llm_providers is not None:
         s["llm_providers"] = [p.dict() for p in req.llm_providers]
-    if req.enable_visual_verification is not None: s["enable_visual_verification"] = req.enable_visual_verification
-    if req.vision_model is not None: s["vision_model"] = req.vision_model
+    if req.enable_visual_verification is not None:
+        s["enable_visual_verification"] = req.enable_visual_verification
+    if req.vision_model is not None:
+        s["vision_model"] = req.vision_model
     
     with open(SETTINGS_PATH, "w") as f:
         json.dump(s, f)
@@ -451,7 +456,7 @@ def test_llm_settings(req: TestLLMRequest):
         if isinstance(e, httpx.HTTPStatusError):
             try:
                 msg = e.response.json().get("error", {}).get("message", msg)
-            except:
+            except Exception:
                 msg = e.response.text or msg
         return {"ok": False, "status": getattr(e, "response", None) and getattr(e.response, "status_code", None), "message": msg}
 
