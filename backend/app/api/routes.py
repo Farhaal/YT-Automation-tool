@@ -76,7 +76,7 @@ def run_job_pipeline_sync(job_id: str, loop: asyncio.AbstractEventLoop, aspect_r
         if s.get("pixabay_key"):
             os.environ["PIXABAY_API_KEY"] = s["pixabay_key"]
         
-        asset_manager = AssetManager(cache_dir=DATA / "assets")
+        asset_manager = AssetManager(cache_dir=DATA / "assets", state_dir=DATA / "cache")
         scenes = asset_manager.select_assets_for_scenes(scenes, orientation=aspect_ratio, job_state=job_state)
         
         # Determine llm_warning
@@ -235,6 +235,71 @@ def update_timeline(job_id: str, timeline: dict):
     with open(job["timeline_path"], "w", encoding="utf-8") as f:
         json.dump(timeline, f, indent=2)
     return {"status": "ok"}
+
+
+def _ensure_local_asset(asset: dict) -> bool:
+    """Make sure a timeline asset has a downloaded file; fetch it on demand if not."""
+    if asset.get("path") and Path(asset["path"]).exists():
+        return True
+    media_url = asset.get("media_url") or ""
+    if not media_url.startswith(("http://", "https://")):
+        return False
+    from backend.app.services.assets import AssetMetadata
+    from backend.app.services.assets.base import download_media
+
+    meta = AssetMetadata(
+        provider=asset.get("source", "unknown"),
+        provider_asset_id=asset.get("provider_asset_id", ""),
+        asset_key=asset.get("asset_key") or media_url,
+        media_url=media_url,
+        media_type=asset.get("type", "image"),
+    )
+    path = download_media(meta, DATA / "assets")
+    if not path:
+        return False
+    asset["path"] = path
+    return True
+
+
+@router.post("/jobs/{job_id}/scenes/{scene_id}/swap")
+def swap_scene_asset(job_id: str, scene_id: str):
+    """Swap a scene's clip for its backup, downloading the backup first if needed.
+
+    If the backup can't be downloaded, the next stored alternative is tried. The
+    replaced clip becomes the new backup, so swapping again undoes it.
+    """
+    job = job_manager.get_job(job_id)
+    if not job or not job.get("timeline_path"):
+        raise HTTPException(status_code=404, detail="Timeline not found")
+    with open(job["timeline_path"], "r", encoding="utf-8") as f:
+        timeline = json.load(f)
+
+    scene = next((s for s in timeline.get("scenes", []) if s.get("id") == scene_id), None)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    current = scene.get("asset")
+    current_key = (current or {}).get("asset_key")
+    options, seen = [], {current_key}
+    for option in [scene.get("backup_asset")] + list(scene.get("alternatives") or []):
+        if option and option.get("asset_key") not in seen:
+            seen.add(option.get("asset_key"))
+            options.append(option)
+    if not options:
+        raise HTTPException(status_code=400, detail="No alternative clip for this scene")
+
+    chosen = next((o for o in options if _ensure_local_asset(o)), None)
+    if chosen is None:
+        raise HTTPException(status_code=502, detail="Could not download an alternative clip. Try again later.")
+
+    rest = [o for o in options if o is not chosen]
+    scene["asset"] = chosen
+    scene["backup_asset"] = current if current else (rest[0] if rest else None)
+    scene["alternatives"] = ([current] if current else []) + rest
+
+    with open(job["timeline_path"], "w", encoding="utf-8") as f:
+        json.dump(timeline, f, indent=2)
+    return {"scene": scene}
 
 def run_render_sync(job_id: str, draft_mode: bool, loop: asyncio.AbstractEventLoop):
     def sync_notify(job_id, data):

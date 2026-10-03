@@ -44,6 +44,10 @@
           "backup_asset": {
             "$ref": "#/definitions/AssetMetadata"
           },
+          "alternatives": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/AssetMetadata" }
+          },
           "motion": { "type": "string", "enum": ["none", "kenburns_in", "kenburns_out"] },
           "transition_out": {
             "type": "object",
@@ -114,6 +118,7 @@
         "author": { "type": "string" },
         "license": { "type": "string" },
         "url": { "type": "string" },
+        "media_url": { "type": ["string", "null"] },
         "asset_key": { "type": "string" },
         "provider_asset_id": { "type": "string" },
         "license_url": { "type": ["string", "null"] },

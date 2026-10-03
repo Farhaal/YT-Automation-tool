@@ -3,20 +3,35 @@ from typing import Any, Dict, List, Optional
 
 from backend.app.core.paths import DATA
 from backend.app.services.assets import AssetMetadata
+from backend.app.services.assets.health import ProviderHealth
 from backend.app.services.assets.openverse import OpenverseProvider
 from backend.app.services.assets.pexels import PexelsProvider
 from backend.app.services.assets.pixabay import PixabayProvider
+from backend.app.services.assets.search_cache import SearchCache
 from backend.app.services.assets.wikimedia import WikimediaProvider
+
+# Ranked runners-up kept per scene as swap options (metadata only, downloaded on demand).
+MAX_ALTERNATIVES = 3
 
 
 class AssetManager:
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Optional[Path] = None, state_dir: Optional[Path] = None):
         self.fast_tier = [PexelsProvider(), PixabayProvider()]
         self.slow_tier = [OpenverseProvider(), WikimediaProvider()]
         self.providers = self.fast_tier + self.slow_tier
         self.used_asset_keys = set()
         self.cache_dir = cache_dir or (DATA / "assets")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Quota/cooldown state and search cache. The app passes DATA/"cache"; a custom
+        # cache_dir without a state_dir (tests) keeps the state next to it, never in data/.
+        if state_dir is None:
+            state_dir = DATA / "cache" if cache_dir is None else self.cache_dir / "_state"
+        self.health = ProviderHealth(Path(state_dir) / "quota.json")
+        self.search_cache = SearchCache(Path(state_dir) / "search")
+        for provider in self.providers:
+            provider.health = self.health
+            provider.search_cache = self.search_cache
 
     def rank_assets(self, assets: List[AssetMetadata], orientation: str, scene_duration: float, scene_query: str = "") -> List[AssetMetadata]:  # noqa: E501
         import re
@@ -71,12 +86,15 @@ class AssetManager:
                     
             # 7. Attribution preference
             pri_attr = 1 if not a.attribution_required else 0
-            
+
+            # 8. Final tie-break: longer videos leave more footage to work with
+            pri_length = a.duration if a.media_type == "video" else 0.0
+
             # If zero overlap, rank it absolutely last by negating the relevance score or putting a huge penalty
             if pri_relevance == 0:
-                return (-1, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
-                
-            return (pri_relevance, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr)
+                return (-1, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr, pri_length)
+
+            return (pri_relevance, pri_query, pri_pos, pri_media, pri_orientation, pri_res, pri_dur, pri_attr, pri_length)
 
         # Filter out used assets by composite asset_key
         unused = [a for a in assets if a.asset_key not in self.used_asset_keys]
@@ -121,8 +139,7 @@ class AssetManager:
         
         ranked = self.rank_assets(candidates, orientation, scene_duration, full_scene_query)
         best_asset = None
-        backup_asset = None
-        
+
         # --- VERIFICATION STEP ---
         if settings.ENABLE_VISUAL_VERIFICATION:
             top_k = [c for c in ranked if c.preview_image_url][:4]
@@ -149,20 +166,25 @@ class AssetManager:
                         ranked[0].match_reason = "Verification failed or skipped."
         # -------------------------
         
-        for asset in ranked:
+        # Download only the winner. Runners-up are kept as metadata and fetched on swap.
+        for idx, asset in enumerate(ranked):
             provider = next((p for p in self.providers if p.name == asset.provider), None)
             if not provider:
                 continue
-            
-            local_path = provider.download(asset, self.cache_dir)
-            if local_path:
-                if not best_asset:
-                    best_asset = asset
-                    self.used_asset_keys.add(asset.asset_key)
-                elif not backup_asset:
-                    backup_asset = asset
-                    break
-        return best_asset, backup_asset
+            if provider.download(asset, self.cache_dir):
+                best_asset = asset
+                self.used_asset_keys.add(asset.asset_key)
+                remaining = ranked[idx + 1:]
+                break
+        else:
+            return None, []
+
+        alternatives = [
+            a for a in remaining
+            if a.asset_key not in self.used_asset_keys
+            and any(p.name == a.provider for p in self.providers)
+        ][:MAX_ALTERNATIVES]
+        return best_asset, alternatives
 
     def select_assets_for_scenes(self, scenes: List[Dict[str, Any]], orientation: str = "landscape", job_state: Optional[Dict] = None) -> List[Dict[str, Any]]:  # noqa: E501
         for scene in scenes:
@@ -176,32 +198,34 @@ class AssetManager:
             full_scene_query = " ".join(queries)
             
             best_asset = None
-            backup_asset = None
-            
+            alternatives: List[AssetMetadata] = []
+
             for query_idx, query in enumerate(queries):
                 # Phase 1: Fast Tier
                 candidates = self._concurrent_search(self.fast_tier, query, query_idx, orientation)
                 if candidates:
-                    best_asset, backup_asset = self._rank_and_download(
+                    best_asset, alternatives = self._rank_and_download(
                         candidates, orientation, scene_duration, full_scene_query,
                         scene_text=scene.get("text", ""), topic=scene.get("topic", ""), job_state=job_state
                     )
-                
+
                 # Phase 2: Slow Tier (only if fast tier yielded nothing usable)
                 if not best_asset:
                     slow_candidates = self._concurrent_search(self.slow_tier, query, query_idx, orientation)
                     if slow_candidates:
-                        best_asset, backup_asset = self._rank_and_download(
+                        best_asset, alternatives = self._rank_and_download(
                             slow_candidates, orientation, scene_duration, full_scene_query,
                             scene_text=scene.get("text", ""), topic=scene.get("topic", ""), job_state=job_state
                         )
-                
+
                 # Early exit if we found a good asset
                 if best_asset:
                     break
-                        
+
             scene["asset"] = best_asset.model_dump() if best_asset else None
-            scene["backup_asset"] = backup_asset.model_dump() if backup_asset else None
+            scene["alternatives"] = [a.model_dump() for a in alternatives] if best_asset else []
+            # Kept for the editor's one-click swap; not downloaded until it is used.
+            scene["backup_asset"] = scene["alternatives"][0] if scene["alternatives"] else None
             
             # Carry over verification flags if they exist
             if best_asset:

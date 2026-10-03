@@ -1,11 +1,10 @@
 import re
 from typing import List
 
-import httpx
-
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import USER_AGENT, AssetProvider
+from backend.app.services.assets.base import RESULTS_PER_PAGE, TARGET_LONG_SIDE, USER_AGENT, AssetProvider
+from backend.app.services.assets.search_cache import normalize_query
 
 
 class WikimediaProvider(AssetProvider):
@@ -15,26 +14,26 @@ class WikimediaProvider(AssetProvider):
     def search(self, query: str, orientation: str = "landscape") -> List[AssetMetadata]:
         results = []
         try:
-            resp = httpx.get(
+            data = self._get_json(
                 "https://commons.wikimedia.org/w/api.php",
                 headers={"User-Agent": USER_AGENT},
                 params={
                     "action": "query",
                     "generator": "search",
-                    "gsrsearch": f"filetype:bitmap {query}",
+                    "gsrsearch": f"filetype:bitmap {normalize_query(query)}",
                     "gsrnamespace": 6,
-                    "gsrlimit": 10,
+                    "gsrlimit": RESULTS_PER_PAGE,
                     "srsort": "relevance",
                     "prop": "imageinfo",
                     "iiprop": "url|size|extmetadata",
-                    "iiurlwidth": 400,
+                    # A ~1080p rendition to download instead of multi-megapixel originals.
+                    "iiurlwidth": TARGET_LONG_SIDE,
                     "format": "json"
                 },
                 timeout=5.0,
                 follow_redirects=True
             )
-            if resp.status_code == 200:
-                data = resp.json()
+            if data:
                 pages = data.get("query", {}).get("pages", {})
                 
                 query_tokens = set(re.findall(r'\w+', query.lower()))
@@ -61,11 +60,15 @@ class WikimediaProvider(AssetProvider):
                     if desc_url:
                         attribution_text += f' Source: {desc_url}'
                     
+                    thumb = info.get("thumburl")
+                    media_url = thumb if thumb and (info.get("width") or 0) > TARGET_LONG_SIDE else info["url"]
+                    preview = thumb.replace(f"/{TARGET_LONG_SIDE}px-", "/400px-") if thumb else info["url"]
+
                     results.append(AssetMetadata(
                         provider=self.name,
                         provider_asset_id=str(page_id),
                         asset_key=f"{self.name}:{page_id}",
-                        media_url=info["url"],
+                        media_url=media_url,
                         source_page_url=desc_url,
                         author=author,
                         license_name=license_name,
@@ -76,7 +79,7 @@ class WikimediaProvider(AssetProvider):
                         attribution_required=True,
                         attribution_text=attribution_text,
                         query=query,
-                        preview_image_url=info.get("thumburl", info["url"])
+                        preview_image_url=preview
                     ))
         except Exception as e:
             logger.warning(f"Wikimedia search failed for '{query}': {type(e).__name__}")

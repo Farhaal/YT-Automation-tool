@@ -28,6 +28,8 @@ class TimelineAssembler:
             "author": asset_meta["author"],
             "license": asset_meta["license_name"],
             "url": asset_meta.get("source_page_url") or asset_meta.get("media_url", ""),
+            # Direct file link, so swap options that were never downloaded can be fetched later.
+            "media_url": asset_meta.get("media_url"),
             "asset_key": asset_meta.get("asset_key", ""),
             "provider_asset_id": asset_meta.get("provider_asset_id", ""),
             "license_url": asset_meta.get("license_url"),
@@ -57,6 +59,7 @@ class TimelineAssembler:
                 "text": scene["text"],
                 "asset": timeline_asset,
                 "backup_asset": timeline_backup,
+                "alternatives": [self._map_asset(a) for a in scene.get("alternatives") or [] if a],
                 "motion": "kenburns_in" if enable_motion else "none",
             }
             if transition:

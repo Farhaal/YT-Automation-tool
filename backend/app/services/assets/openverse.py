@@ -1,10 +1,9 @@
 from typing import List
 
-import httpx
-
 from backend.app.core.logger import logger
 from backend.app.services.assets import AssetMetadata
-from backend.app.services.assets.base import USER_AGENT, AssetProvider
+from backend.app.services.assets.base import RESULTS_PER_PAGE, USER_AGENT, AssetProvider
+from backend.app.services.assets.search_cache import normalize_query
 
 
 class OpenverseProvider(AssetProvider):
@@ -14,15 +13,14 @@ class OpenverseProvider(AssetProvider):
     def search(self, query: str, orientation: str = "landscape") -> List[AssetMetadata]:
         results = []
         try:
-            resp = httpx.get(
+            data = self._get_json(
                 "https://api.openverse.org/v1/images/",
                 headers={"User-Agent": USER_AGENT},
-                params={"q": query, "page_size": 5},
+                params={"q": normalize_query(query), "page_size": RESULTS_PER_PAGE},
                 timeout=8.0,
                 follow_redirects=True
             )
-            if resp.status_code == 200:
-                data = resp.json()
+            if data:
                 for p in data.get("results", []):
                     results.append(AssetMetadata(
                         provider=self.name,

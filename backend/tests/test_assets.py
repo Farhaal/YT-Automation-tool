@@ -204,24 +204,24 @@ def test_asset_manager_comprehensive(mock_httpx):
         assert best["asset_key"] == "Pexels:primary_vid"
         assert best["query"] == "primary"
         
-        # Backup: "Pixabay:primary_vid" fails to download (network error chunk crash).
-        # We assert partial file was cleaned up.
-        pixabay_hash = hashlib.md5("Pixabay:primary_vid".encode()).hexdigest()
-        assert not (temp_path / f"{pixabay_hash}.mp4").exists(), "Partial download file was not cleaned up!"
-        
-        # Due to the fast-tier early exit, we stop searching once Pexels:primary_vid is found.
-        # Thus, the slow tier is skipped, and no valid backup remains for this scene.
+        # Backup: the runner-up "Pixabay:primary_vid" is kept as metadata only. It is NOT
+        # downloaded during the job (it is fetched on demand when the user swaps).
         backup = s1.get("backup_asset")
-        assert backup is None
-        
-        # Ensure httpx.stream was NOT called for secondary_vid because we pre-cached it
+        assert backup is not None
+        assert backup["asset_key"] == "Pixabay:primary_vid"
+        assert backup["local_path"] is None
+        assert s1["alternatives"][0]["asset_key"] == "Pixabay:primary_vid"
+
         called_urls = [call[0][1] for call in mock_stream.call_args_list]
+        assert "http://fail_download.mp4" not in called_urls, "Backup must not be downloaded eagerly"
+        # Exactly one download for the scene: the chosen clip.
+        assert called_urls.count("http://primary.mp4") == 1
+
+        # Ensure httpx.stream was NOT called for secondary_vid because we pre-cached it
         assert "http://secondary.mp4" not in called_urls, "Cache hit failed, network stream was called!"
-        
+
         # Metadata field completeness assertions
-        for meta in [best, backup]:
-            if not meta:
-                continue
+        for meta in [best]:
             assert "provider_asset_id" in meta
             assert "asset_key" in meta
             assert "media_url" in meta
@@ -237,14 +237,20 @@ def test_asset_manager_comprehensive(mock_httpx):
             assert "local_path" in meta
             assert meta["local_path"] is not None
         
-        # Openverse & Wikimedia parsing validation (they are generated, verify they exist in manager's tracking if we specifically test them)  # noqa: E501
-        ov_res = manager.providers[2].search("primary")
+        # The "network_fail" scene put every provider of this job into a cooldown, so the
+        # parsing checks below use fresh providers that don't share the job's health state.
+        assert manager.health.cooldown_remaining("Openverse") > 0
+        from backend.app.services.assets.openverse import OpenverseProvider
+        from backend.app.services.assets.wikimedia import WikimediaProvider
+
+        # Openverse & Wikimedia parsing validation
+        ov_res = OpenverseProvider().search("primary")
         assert len(ov_res) == 1
         ov = ov_res[0]
         assert ov.license_name == "CC-BY"
         assert ov.attribution_text == "Image by OV Creator CC-BY"
         
-        wiki_res = manager.providers[3].search("primary")
+        wiki_res = WikimediaProvider().search("primary")
         assert len(wiki_res) == 1
         wiki = wiki_res[0]
         assert wiki.license_name == "CC-BY-SA"

@@ -128,15 +128,27 @@ export default function EditorView({ jobId }: { jobId: string }) {
     setExporting(false);
   };
 
-  const swapBackup = (idx: number) => {
-    const t = { ...timeline };
-    const scene = t.scenes[idx];
-    if (scene.backup_asset) {
-      const temp = scene.asset;
-      scene.asset = scene.backup_asset;
-      scene.backup_asset = temp;
-      setTimeline(t);
-      toast(`Swapped asset for scene ${idx + 1}`, "success");
+  // The backend downloads the alternate clip on demand (it isn't fetched during generation).
+  const swapBackup = async (idx: number) => {
+    const scene = timeline.scenes[idx];
+    if (!scene.backup_asset) return;
+    try {
+      const res = await fetch(`http://localhost:8000/jobs/${jobId}/scenes/${scene.id}/swap`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.detail || "Couldn't load the alternate clip", "error");
+        return;
+      }
+      const data = await res.json();
+      setTimeline((prev: any) => {
+        const scenes = [...prev.scenes];
+        scenes[idx] = { ...scenes[idx], asset: data.scene.asset, backup_asset: data.scene.backup_asset, alternatives: data.scene.alternatives };
+        return { ...prev, scenes };
+      });
+      toast("Swapped to the alternate clip", "success");
+    } catch (e) {
+      console.error(e);
+      toast("Couldn't load the alternate clip", "error");
     }
   };
 
