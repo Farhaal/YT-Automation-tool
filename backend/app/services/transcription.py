@@ -1,29 +1,46 @@
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, List
+
+
+def register_cuda_dll_dirs(site_dirs: Iterable[str]) -> List[str]:
+    """Make the pip-installed CUDA libraries (nvidia-cublas/cudnn) loadable on Windows.
+
+    os.add_dll_directory alone is not enough: CTranslate2 loads cuBLAS lazily, at the
+    first GPU transcription, with a plain LoadLibrary call that only searches PATH.
+    Without the PATH entry, transcription silently falls back to the much slower CPU.
+    """
+    added = []
+    for sp in dict.fromkeys(site_dirs):
+        for lib in ("cublas", "cudnn"):
+            bin_dir = os.path.join(sp, "nvidia", lib, "bin")
+            if not os.path.isdir(bin_dir) or bin_dir in added:
+                continue
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(bin_dir)
+            path_entries = os.environ.get("PATH", "").split(os.pathsep)
+            if bin_dir not in path_entries:
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+            added.append(bin_dir)
+    return added
+
 
 if sys.platform == "win32":
     try:
         import site
-        sp_dirs = []
-        if hasattr(site, 'getsitepackages'):
-            sp_dirs.extend(site.getsitepackages())
-        sp_dirs.append(os.path.join(sys.prefix, 'Lib', 'site-packages'))
-        
-        for sp in set(sp_dirs):
-            for lib in ["cublas", "cudnn"]:
-                bin_dir = os.path.join(sp, "nvidia", lib, "bin")
-                if os.path.exists(bin_dir):
-                    os.add_dll_directory(bin_dir)
+        sp_dirs = list(site.getsitepackages()) if hasattr(site, "getsitepackages") else []
+        sp_dirs.append(os.path.join(sys.prefix, "Lib", "site-packages"))
+        register_cuda_dll_dirs(sp_dirs)
     except Exception:
         pass
 
-import ctranslate2
-from faster_whisper import WhisperModel
+# These imports must come after the CUDA DLL registration above.
+import ctranslate2  # noqa: E402
+from faster_whisper import WhisperModel  # noqa: E402
 
-from backend.app.core.config import settings
-from backend.app.core.logger import logger
-from backend.app.core.paths import DATA
+from backend.app.core.config import settings  # noqa: E402
+from backend.app.core.logger import logger  # noqa: E402
+from backend.app.core.paths import DATA  # noqa: E402
 
 _model_instance = None
 
