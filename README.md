@@ -183,8 +183,9 @@ npm run dev
    - **Punchy (30s)** — extra-dense visuals in the first 30 seconds.
 2. **Wait for processing** — the progress screen shows each stage live. The very first run
    downloads the speech model (about 460 MB), so it takes longer.
-3. **Review in the Editor** — check each scene, **Swap Backup** for any clip you don't like,
-   adjust motion and transitions, and fix any caption words.
+3. **Review in the Editor** — check each scene, **Swap Alternate** for any clip you don't like
+   (the alternate is downloaded at that moment), adjust motion and transitions, and fix any
+   caption words.
 4. **Finish your video:**
    - **Export to Editor** (recommended) — download a project bundle and finish in CapCut,
      DaVinci Resolve, or Premiere Pro. See [Exporting to your editor](#exporting-to-your-editor).
@@ -207,6 +208,18 @@ them in the app under **Settings**. They are stored only on your computer, in
 |---|---|
 | Pexels | <https://www.pexels.com/api/> |
 | Pixabay | <https://pixabay.com/api/docs/> |
+
+How OpenReel uses these sources:
+- Clips are downloaded at about **1080p**, the size your export uses, never 4K.
+- Only the chosen clip for each scene is downloaded. The next-best options are remembered and
+  fetched only if you swap.
+- Search results are cached in `data/cache/search/` for up to 7 days, so re-running a script
+  doesn't spend your API quota again.
+- Each source has a request budget kept a little under its free limit (Pexels about 200 per
+  hour, Pixabay about 100 per minute). When a source runs out or answers "too many requests"
+  (HTTP 429), OpenReel pauses it, prints **one** line in the log, and keeps going with the other
+  sources. It never waits idle for a rate limit.
+- API keys never appear in the logs.
 
 **AI providers (optional — for smarter, on-topic footage):**
 
@@ -289,6 +302,9 @@ All API keys are set in the app's **Settings** page, not in `.env`.
 | Port 8000 already in use | Stop the other program using it, or close the old backend window. |
 | First generation is very slow | The speech model downloads on first use. Later runs are much faster. On CPU, long audio takes a while — see [GPU acceleration](#gpu-acceleration). |
 | Footage looks generic or off-topic | Add a Pexels/Pixabay key and an AI provider in Settings, and press **Test** to confirm the AI key works. |
+| Log says "Pexels rate-limited - pausing…" or "request quota used up" | Normal on long videos. That source is paused and the others carry on; it resumes by itself. Re-runs of the same script use cached searches. |
+| Log says a source "failed 5 times in a row" or "API key rejected" | Check your internet connection, or re-enter that key in **Settings**. The other sources keep working for this job. |
+| **Swap Alternate** says it couldn't load the clip | Every stored alternate was tried and none could be downloaded (Pixabay image links expire after about a day). Check your connection and try again. |
 | Editor shows "AI query model failed" | That provider/model didn't work. Use **Test** in Settings to find a working model, or enable another provider. |
 
 ## Development

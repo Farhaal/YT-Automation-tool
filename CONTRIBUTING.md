@@ -49,6 +49,9 @@ The same checks run in CI on every push.
 - Edit `requirements.txt` as plain UTF-8 in your editor — don't append to it with shell
   redirection (`>>` in Windows PowerShell writes UTF-16 and breaks `pip install`).
 - Never commit throwaway helper scripts, API keys, `.env`, or anything under `data/`.
+- Asset providers must make search requests through `AssetProvider._get_json()`, not
+  `httpx.get` directly. That's what applies the request quotas, the 429 cooldown/failover and
+  the search cache. Never log a URL that may contain a key; use `redact_url()` if you must.
 
 ## Commits and pull requests
 
